@@ -1,9 +1,9 @@
 # Makefile
 
-/* This is a text file that contains the instructions and necessary rules to 
-automatize the compilation and management in software projects.
+# /* This is a text file that contains the instructions and necessary rules to 
+# automatize the compilation and management in software projects.
+# This file indicates to "make" which source files must be compilated and which order.*/
 
-This file indicates to "make" which source files must be compilated and which order.*/
 # ------------------------------------------------------------------------------------------------
 
 # Module name for .ko file
@@ -22,16 +22,16 @@ PWD := $(shell pwd)
 
 # "all" invokes the build of kernel
 all:
-    make -C $(KERNEL_DIR) M=$(PWD) modules
+	make -C $(KERNEL_DIR) M=$(PWD) modules
 
 
 #"clean" eliminate the unwanted files generated during the compilation.
 clean:
-    make -C $(KERNEL_DIR) M=$(PWD) clean
+	make -C $(KERNEL_DIR) M=$(PWD) clean
 
 
 # "install" automates all the installation durinf the compilation
 install:
-    make -C $(KERNEL_DIR) M=$(PWD) modules_install
+	make -C $(KERNEL_DIR) M=$(PWD) modules_install
 
 .PHONY: all clean install

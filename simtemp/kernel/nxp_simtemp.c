@@ -29,16 +29,16 @@ MODULE_AUTHOR("Daniel Miranda");
 MODULE_DESCRIPTION("NXP SimpTemp");
 MODULE_VERSION("1.0");
 
-static int __int nxp_simptemp_init(void)
+static int __init nxp_simptemp_init(void)
 {
-    prink(KERN_INFO "NXP SimTemp: Modulo cargado exitosamente. Entorno listo.\n");
+    printk(KERN_INFO "NXP SimTemp: Modulo cargado exitosamente. Entorno listo.\n");
     return 0;
 }
 
-static void __exit nxp_simtemp_exit(void)
+static void __exit nxp_simptemp_exit(void)
 {
 
-    prink(KERN_INFO "NXP SimTemp: Modulo descargado. Adios.\n");
+    printk(KERN_INFO "NXP SimTemp: Modulo descargado. Adios.\n");
 
 }
 

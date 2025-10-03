@@ -1,27 +1,30 @@
 # Makefile
-# -----------------------------------------------------------
-# Nombre del modulo (nombre que tendra el archivo .ko)
+
+# * This is a text file that contains the instructions and necessary rules to 
+# automatize the compilation and management in software projects.
+# This file indicates to "make" which source files must be compilated and which order.*/
+
+# ------------------------------------------------------------------------------------------------
+# Module name for .ko file
 obj-m := nxp_simtemp.o
 
-# Ruta al codigo fuente del Kernel
-# Obtiene la ruta del codigo fuente de tu Kernel de Ubuntu
+# Root to source code of kernel
+# Obtains the root to source code of Ubuntu Kernel
 KERNEL_DIR := /lib/modules/$(shell uname -r)/build
 
 # Directorio actual
 PWD := $(shell pwd)
 
-# Regla 'all':
-# Invoca el sistema de build del Kernel (Kbuild)
+# "all" invokes the build of kernel
 all:
-    make -C $(KERNEL_DIR) M=$(PWD) modules
+	make -C $(KERNEL_DIR) M=$(PWD) modules
 
-# Regla 'clean':
-# Elimina los archivos generados (.o, .ko, .mod.c, etc.)
+#"clean" eliminate the unwanted files generated during the compilation.
 clean:
-    make -C $(KERNEL_DIR) M=$(PWD) clean
+	make -C $(KERNEL_DIR) M=$(PWD) clean
 
-# Regla 'install' (Opcional, pero util para automatizar la instalacion)
+# "install" automates all the installation durinf the compilation
 install:
-    make -C $(KERNEL_DIR) M=$(PWD) modules_install
+	make -C $(KERNEL_DIR) M=$(PWD) modules_install
 
 .PHONY: all clean install
