@@ -4,7 +4,7 @@
 automatize the compilation and management in software projects.
 
 This file indicates to "make" which source files must be compilated and which order.*/
-# -----------------------------------------------------------
+# ------------------------------------------------------------------------------------------------
 
 # Module name for .ko file
 obj-m := nxp_simtemp.o
