@@ -300,6 +300,7 @@ static int nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structure
 
 }
 
+//---------------------First Functions for compilation ---------------------
 
 static void __exit nxp_simptemp_exit(void)
 {
