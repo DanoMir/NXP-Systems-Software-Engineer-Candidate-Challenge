@@ -52,47 +52,97 @@ MODULE_VERSION("1.0");
 // static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);      //Prototype of function performed when User Space calls to read().
 // static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait);     //Prototype of function performed when User Space calls to poll(), select() or epoll().
 
+static int nxp_simtemp_remove(struct platform_device *pdev);
+static int nxp_simtemp_probe(struct platform_device *pdev):
+
+//-----------------  Transferred Data  --------------------//
+struct simtemp_sample       //Structure Data Contract [Logic]: Defines transferred data between kernel and user space. Inside the kernel and performed by user space
+{
+    u64 timestamp_ns;       //Sample in nanoseconds: Calculates the accuracy of sampling and jitter from User Space
+    s32 temp_mC;            //Sample in millidegrees: Represents values in float point without float point arithmetic
+    u32 flags;              //Sample status: Notificates to applications if NXP_SAMPLE_AVAILABLE or NXP_THRESHOLD_CROSSED   
+
+}
+__attribute__((packed));    //Avoid memory padding. Recomended by NXP Challenge to keep the same size for Kernel/User
+
+//----------------    Ring Buffer  ------------------------------------//
+struct simtemp_ring_buffer  //Structure for Storage [Logic]: Defines the architecture that stores and manipulates the data of "simtemp_sample[]""
+{
+    struct simtemp_sample buffer[RING_BUFFER_SIZE]; //Structure Data Contract [Logic]:
+    size_t head;                                    //Writing Index: Used by producer "hrtimer" that puts the next sample 
+    size_t tail;                                    //Reading Index: Used by consumer "read" of User Space that takes the next sample.
+    u32 count;                                      //Counter to determine the validate samples in the buffer: ((count == 0) or (count == RING_BUFFER_SIZE)). 
+
+};
 
 
-// struct simtemp_sample       //Structure Data Contract [Logic]: Defines transferred data between kernel and user space. Inside the kernel and performed by user space
-// {
-//     u64 timestamp_ns;       //Sample in nanoseconds: Calculates the accuracy of sampling and jitter from User Space
-//     s32 temp_mC;            //Sample in millidegrees: Represents values in float point without float point arithmetic
-//     u32 flags;              //Sample status: Notificates to applications if NXP_SAMPLE_AVAILABLE or NXP_THRESHOLD_CROSSED   
+//-------------    Driver    ----------------------------------------
+struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configuration values, functionalities and interfaces of Driver reside
+{    
+    struct miscdevice           mdev;       //Structure of Interface [Kernel]: provided by kernel to register the character device
+    wait_queue_head_t           wq;         //Structure of sincronization [Kernel]: Used by "poll" function
+    spinlock_t                  lock;       //Structure of concurrency [Kernel]: Protection of storage (shared resources) of interrupts and simultaneous access 
 
-// }
-// __attribute__((packed));    //Recomended by NXP Challenge 
+    struct hrtimer              timer;      //Structure of timer [Kernel]: Data Producer to initializes the High Resolution
+    ktime_t                     period_ns;  //Structure of Time Type [Kernel]: Data Times with nanosecond precision
 
-// struct simtemp_ring_buffer  //Structure for Storage [Logic]: Defines the architecture that stores and manipulates the data of "simtemp_sample[]""
-// {
-//     struct simtemp_sample buffer[RING_BUFFER_SIZE]; //Structure Data Contract [Logic]:
-//     size_t head;                                    //Writing Index: Used by producer "hrtimer" that puts the next sample 
-//     size_t tail;                                    //Reading Index: Used by consumer "read" of User Space that takes the next sample.
-//     u32 count;                                      //Counter to determine the validate samples in the buffer: ((count == 0) or (count == RING_BUFFER_SIZE)). 
+    struct simtemp_ring_buffer  rb;         //Structure of storage [Logic]: Circular buffer (Data storage)
 
-// };
+    //Configuration of variables for sysfs to export information from Kernel Subsystems to space user
+    s32                         threshold_mC;   //Temperature
+    s32                         sampling_ms;    //Period
 
-// struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configuration values, functionalities and interfaces of driver reside
-// {    
-//     struct miscdevice           mdev;       //Structure of Interface [Kernel]: provided by kernel to register the character device
-//     wait_queue_head_t           wq;         //Structure of sincronization [Kernel]: Used by "poll" function
-//     spinlock_t                  lock;       //Structure of concurrency [Kernel]: Protection of storage (shared resources) of interrupts and simultaneous access 
+    //Configuration of variables for statistics
+    u32                         alerts_count;   //Variable for diagnostic function as logic counter (stats_show) that indicates how many data crossed a critical treshold
+    u32                         updates_count;  //Variable for diagnostic function as logic counter that indicates how many data was produced
 
-//     struct hrtimer              timer;      //Structure of timer [Kernel]: Data Producer to initializes the High Resolution
-//     ktime_t                     period_ns;  //Structure of Time Type [Kernel]: Data Times with nanosecond precision
+};
 
-//     struct simtemp_ring_buffer  rb;         //Structure of storage [Logic]: Circular buffer (Data storage)
+//Funbction Prototypes
+static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev);
+static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample);
+static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample);
 
-//     //Configuration of variables for sysfs to export information from Kernel Subsystems to space user
-//     s32                         threshold_mC;   //Temperature
-//     s32                         sampling_ms;    //Period
+//Ring Buffer State (Verifies if ring buffer is empty, useful for read() and poll())
 
-//     //Configuration of variables for statistics
-//     u32                         alerts_count;   //Variable for diagnostic function as logic counter (stats_show) that indicates how many data crossed a critical treshold
-//     u32                         updates_count;  //Variable for diagnostic function as logic counter that indicates how many data was produced
+static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev)
+{
+    return (dev->rb.count == 0);
 
-// };
+}
 
+//Push Function for write a new sample called by hrtimer[kernel] (Producer)
+//simtemp_buffer_push is a function by hrtimer().
+static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample)
+{
+    //Overwriting Logic, If buffer is full, 
+    if(dev->rb.count == RING_BUFFER_SIZE) //Overwrite
+    {
+        dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
+        dev->rb.count--;
+        printk(KERN_WARNING "NXP SimTemp: Buffer overflow, discarded sample.\n");
+
+
+    }
+    //Algorithm of sample writing through module (Wrap Around)
+    dev->rb.buffer[dev->rb.head] = *sample;
+    dev->rb.head = (dev->rb.head + 1) % RING_BUFFER_SIZE;
+    dev->rb.count++; 
+}
+
+// Pop: Read and remove the oldest sample (Called by read() function)
+static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample)
+{
+    if(simtemp_buffer_is_empty(dev))
+    {
+        return false;
+    }
+
+    //Copy the data and the queue moves forward
+    *sample = dev->rb.buffer[dev->rb.tail];
+    dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
+    dev->rb.count--;
+}
 
 // //---------File Operations Table: Functions map of driver-----------------
 
@@ -155,75 +205,92 @@ MODULE_VERSION("1.0");
 
 
 // }
+//----------------Platform Driver Section------------------------------ */
+//Simulation by Device Tree, platform is the HW simulated towards *pdev
+static int nxp_simtemp_probe(struct platform_device *pdev)
+{
+    struct nxp_simtemp_dev *nxp_dev; 
+    int ret; //[kernel] Error code
+
+//Memory for nxp_simtemp_dev.
+//Memory Allocation: Allocates and clean memory for structure
+//Kzalloc[kernel] defines the memory
+
+nxp_dev = devm_kzalloc(&pdev->dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate memory for *nxp_dev
+if (!nxp_dev)
+{
+    return -ENOMEM; //[Kernel] Without Memory
+}
+
+platform_set_drvdata(pdev, nxp_dev); // [Kernel] Saves the pointer "nxp_dev" to structure "platform device" [kernel]
+
+//Inicialice el spinlock y la wait_queue.
+//Primitives for spinlock and wait_queue
+
+spin_lock_init(&nxp_dev->lock); //[Kernel] Initialize spinlock 
+init_waitqueue_head(&nxp_dev->wq);  //[Kernel] Initialize waiting queue 
+
+//Device Tree parsing Configuration (By default)
+//This values will be overwritten by Device Tree Parsing Logic through (sampling-ms) to obtain specific values of HW
+
+nxp_dev->sampling_ms = 100;
+nxp_dev->threshold_mC = 45000;
+
+// Initialization and startup of producer (Timer and Buffer)
+
+// NOTA: Aqui iría la lógica para leer y sobrescribir estos valores con el Device Tree
+//Initializes Ring Buffer Logic (*head, *tail and *count from Ring Buffer initializes to 0)
+simtemp_buffer_init(&nxp_dev->rb); // [Logic] Ensure a clean initial state before start the timer
+
+//Initializes Timer Logic from Producer( hrtimer and callback initializes to 0) 
+simtemp_timer_setup(nxp_dev); // [Logic] Activates the data activation flow
+
+
+//
+//Registre la miscdevice (/dev/simtemp) Files System.
+//Register of Character Device
+
+nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // [Kernel] Device Number. Asks to Linux for a lower available number of available device
+nxp_dev->mdev.name = "simtemp"; //[Logic] File Name created in miscdevice (/dev/simtemp) Files System
+nxp_dev->mdev.fops = &nxp_simtemp_fops; // [Logic] Structure Operations Table is assigned to "open()","read()" and "poll()" functions
+
+ret = misc_register(&nxp_dev->mdev); //[Kernel] Final Register for miscdevice (/dev/simtemp) Files System
+
+if (ret) //If register fails 
+{
+    dev_err(&pdev->dev, "Error registrando miscdevice\n"); // [Kernel] Critical cleaning stopping hrtimer() before leaving the function
+    return ret;
+}
+
+//Initialize the producer Timer
+// simtemp_timer_setup(nxp_dev); //SE LLAMA AL FINAL
+
+//Successful Message after device registered
+
+dev_info(&pdev->dev, "NXP SimTemp device registered at /dev/%s\n", nxp_dev->mdev.name ); //[kernel] Prints message in kernel log (dmesg)
+return 0;
+
+}
 
 
 
-// static int nxp_simtemp_probe(struct platform_device *pdev)
-// {
-//     struct nxp_simtemp_dev *nxp_dev; 
-//     int ret;
-
-// //Asigne memoria para tu nxp_simtemp_dev.
-// //Memory Allocation: Allocates and clean memory for structure
-
-// nxp_dev = devm_kzalloc(&pdev->dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
-// if (!nxp_dev)
-// {
-//     return -ENOMEM; //Without Memory
 // }
+//----------------Release function (reverse of probe)---------------------------
+static int nxp_simtemp_remove(struct platform_device *pdev)
+{
+    struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //
 
-// //Inicialice el spinlock y la wait_queue.
-// //Primitives for spinlock and wait_queue
+    // CRÍTICO para Clean Unload: Detener el timer y desregistrar todo
+    hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
+    misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
+    // La memoria se libera automaticamente gracias a devm_kzalloc
 
-// spin_lock_init(&nxp_dev->lock); //Initialize spinlock [Kernel Function]
-// init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
+    //Memory liberated automated by devm_kzalloc
 
-// //Device Tree parsing Configuration (By default)
+    dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n"); //[Kernel] Attachs device name with message log
+    return 0;
 
-// nxp_dev->sampling_ms = 100;
-// nxp_dev->threshold_mC = 45000;
-
-// // NOTA: Aqui iría la lógica para leer y sobrescribir estos valores con el Device Tree
-
-// //
-// //Registre la miscdevice (/dev/simtemp).
-// //Register of Character Device
-
-// nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
-// nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
-// nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations table is assigned
-
-// ret = misc_register(&nxp_dev->mdev); //Register the device.
-
-// if (ret)
-// {
-//     dev_err(&pdev->dev, "Error registrando miscdevice\n");
-//     return ret;
-// }
-
-// //Initialize the producer Timer
-// // simtemp_timer_setup(nxp_dev); //SE LLAMA AL FINAL
-
-// dev_info(&pdev->dev, "NXP SimTemp device registered at /dev/%s\n", nxp_dev->mdev.name );
-// return 0;
-
-// }
-// //---Release function (reverse of probe)
-// static int nxp_simtemp_remove(struct platform_device *pdev)
-// {
-//     struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev);
-
-//     // CRÍTICO para Clean Unload: Detener el timer y desregistrar todo
-//     // hrtimer_cancel(&nxp_dev->timer); 
-//     misc_deregister(&nxp_dev->mdev); // Delete Character Device of system files durin the clean remove
-//     // La memoria se libera automaticamente gracias a devm_kzalloc
-
-//     //Memory liberated automated by devm_kzalloc
-
-//     dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
-//     return 0;
-
-// }
+}
 
 
 
