@@ -315,8 +315,16 @@ static int __init nxp_simptemp_init(void)
     return 0;
 }
 
+<<<<<<< HEAD
 //************* Macros (always placed al the end of the code for Linux )************************** */
 
 //module_init(nxp_simptemp_init); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
 //module_platform_driver(nxp_simtemp_driver);   //Macro for driver that evolves the platform driver with probe/evolve
 //module_exit(nxp_simptemp_exit); // [Kernel] Macro for indicate to kernel what funtion must be called to unload the module nxp_simtemp_exit
+=======
+//----------  Macros for developing modules in the Kernel---------------------
+//Always are located at the end of the code
+module_init(nxp_simptemp_init); // Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
+//module_platform_driver(nxp_simtemp_driver);       //Macro for driver that evolves the platform driver with probe/evolve
+module_exit(nxp_simptemp_exit); // Macro for indicate to kernel what funtion must be called to unload the module nxp_simtemp_exit
+>>>>>>> main
