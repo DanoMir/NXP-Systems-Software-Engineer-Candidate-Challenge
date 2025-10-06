@@ -229,7 +229,7 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
 
 // };
 
-//------------------Platform Device-----------------------------------/
+//------------------ Platform Device -----------------------------------/
 // ----------- Platform Device: Probe Function ----------------------------------------/
 
 static int nxp_simtemp_probe(struct platform_device *pdev)
