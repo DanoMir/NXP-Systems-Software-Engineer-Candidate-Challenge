@@ -31,8 +31,8 @@
 #include <linux/slab.h>             //kzalloc/kfree    
 #include <linux/uaccess.h>          //Copy to user 
 
-#include <linux/time.h>          //Timer for simulation
-#include <linux/of.h>            //Device Tree        
+#include <linux/time.h>             //Timer for simulation
+#include <linux/of.h>               //Device Tree        
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Daniel Miranda");
@@ -48,14 +48,14 @@ MODULE_VERSION("1.0");
 
 // /--------------File Operations Prototypes for "read" and "poll"---------------
 
-// static int nxp_simtemp_open(struct inode *inode, struct file *file);         //Prototype of function performed once when user space opens the file
-// static int nxp_simtemp_release(struct inode *inode, struct file *file);  //Prototype of function performed when user space calls to close() or when the process end.
-// static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);      //Prototype of function performed when User Space calls to read().
-// static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait);     //Prototype of function performed when User Space calls to poll(), select() or epoll().
+static int nxp_simtemp_open(struct inode *inode, struct file *file);                                //Function Prototype performed once when user space opens the file
+static int nxp_simtemp_release(struct inode *inode, struct file *file);                             //Function Prototype performed when user space calls to close() or when the process end.
+static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);   //Function Prototype performed when User Space calls to read().  
+static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait);                //Function Prototype performed when User Space calls to poll(), select() or epoll().
+static void nxp_simtemp_remove(struct platform_device *pdev);                                       //Function Prototype [Kernel] structure from "platform_device.h"
+static int nxp_simtemp_probe(struct platform_device *pdev);                                         //Function Prototype [Kernel] structure from "platform_device.h"
 
-static int nxp_simtemp_remove(struct platform_device *pdev); //[Kernel] structure from "platform_device.h"
-static int nxp_simtemp_probe(struct platform_device *pdev);  //[Kernel] structure from "platform_device.h"
-
+//--------------------------Data Structure---------------------------------------
 //----------------- Data Structure: Transferred Data  --------------------//
 struct simtemp_sample       // Data Structure Contract [Logic]: Defines transferred data between kernel and user space. Inside the kernel and performed by user space
 {
@@ -76,10 +76,10 @@ struct simtemp_ring_buffer  //Structure for Storage [Logic]: Defines the archite
 
 };
 
-//------------- Data Structure:  Driver    ----------------------------------------
+//------------- Data Structure:  Driver (nxp_simtemp)   ----------------------------------------
 struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configuration values, functionalities and interfaces of Driver reside
 {    
-    struct miscdevice           mdev;       //Structure of Interface [Kernel]: provided by kernel to register the character device
+    struct miscdevice           mdev;       //Structure of Interface [Kernel]: Miscellaneous Device to register the Character Device
     wait_queue_head_t           wq;         //Structure of sincronization [Kernel]: Used by "poll" function
     spinlock_t                  lock;       //Structure of concurrency [Kernel]: Protection of storage (shared resources) of interrupts and simultaneous access 
 
@@ -98,13 +98,13 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
 
 };
 
-//Function Prototypes [Logic]
+//----------------------Logic Prototypes fo Functions [Logic]------------------
 static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev);
 static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample);
 static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample);
 
 
-// ---------------------- Logic Prototypes - (SimTemp Functions)  ---------------------------------------
+// ---------------------- (SimTemp Functions)  ---------------------------------------
 
 //Logic Prototypes (SimTemp Function-Ring Buffer State): Verifies if ring buffer is empty, useful for read() and poll())
 static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev)
@@ -137,30 +137,43 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
 {
     if(simtemp_buffer_is_empty(dev))
     {
-        return false;
+        return false; //If nothing to read
     }
 
     //Copy the data and the queue moves forward
     *sample = dev->rb.buffer[dev->rb.tail];
     dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
     dev->rb.count--;
+
+    return true; //If reading was successful
 }
 
 // ------------    Platform Driver     ------------------------------------
 // //------------Final register of Driver------------------------//
 //---------------- File Prototypes--------------------------------
 
-// static struct platform_driver nxp_simtemp_driver=
-// {
-//     .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device
-//     .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded
-//     .driver             =
-//     {
-//         .name           = "nxp_simtemp",            //Name of driver for file system of Kernel
-//         .owner          = THIS_MODULE,
-//         .of_match_table = nxp_simtemp_dt_match,     //Search in the Device Tree devices with the string (nxp, simtemp) if it is found, "probe" is activated
-//     },
-// };
+//-----------Platform Driver: ----- Hardware --------------------
+// //--------Structure for Device Tree Matching------------------//
+static const struct of_device_id nxp_simtemp_dt_match[]=
+{
+    {   .compatible = "nxp,simtemp"},
+    {   /*Sentinel*/}                   //Sentinel stops the search
+};
+
+
+//-----------Platform Driver: ----- Driver Starter --------------------
+//Indicates to Platform Driver from kernel How to manipulates this data from Driver
+static struct platform_driver nxp_simtemp_driver=
+{
+    .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp, simtemp)
+    .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
+    .driver             =
+    {
+        .name           = "nxp_simtemp",            //Name of driver for file system of Kernel
+        .owner          = THIS_MODULE,              //Indicates to Kernel that the set of functions belongs to actual module (user module)
+        .of_match_table = nxp_simtemp_dt_match,     //Search in the Device Tree devices with the string (nxp, simtemp) if it is found, "probe" is activated
+    },
+};
 
 // //---------File Operations Table: Functions map of driver-----------------
 
@@ -169,76 +182,75 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
 
 
 
-// //--------Structure for Device Tree Matching------------------//
-// static const struct of_device_id nxp_simtemp_dt_match[]=
-// {
-//     {   .compatible = "nxp,simtemp"},
-//     {   /*Sentinel*/}
-// }
 
-// static int nxp_simtemp_open(struct inode *inode, struct file *file);         //Prototype of function performed once when user space opens the file
-// {
-//     struct nxp_simtemp_dev *nxp_dev = container_of(file->private_data, struct nxp_simtemp_dev, mdev);
-
-//     file->private_data = nxp_dev; //
-
-//     return 0;
-// }
-
-// static int nxp_simtemp_release(struct inode *inode, struct file *file);  //Prototype of function performed when user space calls to close() or when the process end.
-// {
-// //Aqui se liberara memoria si se hubiera asignado memoria especifica para este proceso de apertura
-
-// return 0;
-// }
-
-// static ssize_t nxp_simtemp_read(static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos));      //Prototype of function performed when User Space calls to read().
-// {
-//     //Block Logic
-//     //Ring Buffer
-//     //copy_to_user
-
-//     return 0; //Returns 0 bytes readed
-
-// }
-
-// static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait);     //Prototype of function performed when User Space calls to poll(), select() or epoll().
-// {
-//     // poll_wait Logic
-//     // Return of flags 
-
-//     return 0; 
-
-
-// }
-
-
-// }
-
-
-// "file_operations"[kernel]: Standard Templete definied by Linux for Character Devices (/dev)
+//-----------------------------   Platform Driver: Interface Contract API .   nxp_simtemp_fops     --------------------------------------------------------------------
+//Pointers table to functions
+// "file_operations"[kernel]: Standard Template definied by Linux for Character Devices (/dev)
 // "nxp_simtemp_fops" [logic]: Variable provides by implemented logic only visible inside this file (static). 
-// static const struct file_operations nxp_simtemp_fops =
-// {
+static const struct file_operations nxp_simtemp_fops =
+{
 
-//     .owner      =THIS_MODULE,           //Indicates to Kernel that the set of functions belongs to actual module (user module)
-//     .open       =nxp_simtemp_open,      //Pointer to the function performed when User Space calls to open("/dev/simtemp", ...)
-//     .release    =nxp_simtemp_release,   //Pointer to the function performed when User Space calls to close(fd). 
-//     .read       =nxp_simtemp_read,      //Pointer to the function performed when User Space calls to read(fd, ...)
-//     .poll       =nxp_simtemp_poll,      //Pointer to the function performed when User Space calls to poll() or epoll().
+    .owner      =THIS_MODULE,           //Indicates to Kernel that the set of functions belongs to actual module (user module)
+    .open       =nxp_simtemp_open,      //Pointer to the function performed when User Space calls to open("/dev/simtemp", ...)
+    .release    =nxp_simtemp_release,   //Pointer to the function performed when User Space calls to close(fd). 
+    .read       =nxp_simtemp_read,      //Pointer to the function performed when User Space calls to read(fd, ...)
+    .poll       =nxp_simtemp_poll,      //Pointer to the function performed when User Space calls to poll() or epoll().
 
-// };
+};
 
-//------------------ Platform Device -----------------------------------/
-// ----------- Platform Device: Probe Function ----------------------------------------/
+///------------------------------Functions----------------------------------
+static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function performed once when User Space opens the file /dev/simtemp
+{
+    struct nxp_simtemp_dev *nxp_dev = container_of(file->private_data, struct nxp_simtemp_dev, mdev);
+
+    file->private_data = nxp_dev; //
+
+    return 0;
+}
+
+static int nxp_simtemp_release(struct inode *inode, struct file *file)  //Prototype of function performed when user space calls to close() or when the process end.
+{
+
+//Here memory is liberated if specific memory was assignated for this aperture process.
+
+return 0;
+}
+
+static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)      //Prototype of function performed when User Space calls to read().
+{
+    //Block Logic
+    //Ring Buffer
+    //copy_to_user
+
+    return 0; //Returns 0 bytes readed
+
+}
+
+static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //Prototype of function performed when User Space calls to poll(), select() or epoll().
+{
+    // poll_wait Logic
+    // Return of flags 
+
+    return 0; 
+
+
+}
+
+
+
+
+
+
+//------------------ Platform Device     Functions     -----------------------------------/
+// ----------- Platform Device: Probe Function (Lifecycle)----------------------------------------/
 
 static int nxp_simtemp_probe(struct platform_device *pdev)
 {
     struct nxp_simtemp_dev *nxp_dev; 
     int ret;
 
-//Asigne memoria para tu nxp_simtemp_dev.
-//Memory Allocation: Allocates and clean memory for structure
+
+//Memory Allocation: Allocates and clean memory for structure nxp_simtemp_dev.
 
 nxp_dev = devm_kzalloc(&pdev->dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
 if (!nxp_dev)
@@ -246,8 +258,7 @@ if (!nxp_dev)
     return -ENOMEM; //Without Memory
 }
 
-//Inicialice el spinlock y la wait_queue.
-//Primitives for spinlock and wait_queue
+//Initializes primitives for spinlock and wait_queue.
 
 spin_lock_init(&nxp_dev->lock); //Initialize spinlock [Kernel Function]
 init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
@@ -257,17 +268,15 @@ init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
 nxp_dev->sampling_ms = 100;
 nxp_dev->threshold_mC = 45000;
 
-// NOTA: Aqui iría la lógica para leer y sobrescribir estos valores con el Device Tree
 
-//
-//Register la miscdevice (/dev/simtemp).
+//Register miscdevice (/dev/simtemp).
 //Register of Character Device
 
-//nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
-//nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
-//nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations Table from nxp_simtemp_fops is assigned to Files System of Linux (/dev/simtemp)
+nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
+nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
+nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations Table from nxp_simtemp_fops is assigned to Files System of Linux (/dev/simtemp)
 
-ret = misc_register(&nxp_dev->mdev); //Register the device.
+ret = misc_register(&nxp_dev->mdev); //Register the Device Driver and /dev/simtemp is created by kernel .
 
 if (ret)
 {
@@ -276,47 +285,45 @@ if (ret)
 }
 
 //Initialize the producer Timer
-// simtemp_timer_setup(nxp_dev); //SE LLAMA AL FINAL
+// simtemp_timer_setup(nxp_dev); //to final
 
 dev_info(&pdev->dev, "NXP SimTemp device registered at /dev/%s\n", nxp_dev->mdev.name );
 return 0;
 
 }
 
-//----------------Platform Device: Release function (reverse of probe)---------------------------
-static int nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structure from "platform_device.h"
+//----------------Platform Device: Release function (reverse of probe) (Lifecycle)---------------------------
+static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structure from "platform_device.h"
 {
     struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //[Kernel] structure from "platform_device.h"
 
-    // CRÍTICO para Clean Unload: Detener el timer y desregistrar todo
+    //Clean Unload [kernel]: Stops timer and desregister all
     hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
     misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
-    // La memoria se libera automaticamente gracias a devm_kzalloc
-
-    //Memory liberated automated by devm_kzalloc
+    //Memory automatically is liberated by devm_kzalloc
 
     dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n"); //[Kernel] Attachs device name with message log
-    return 0;
+    
 
 }
 
 //---------------------First Functions for compilation ---------------------
 
-static void __exit nxp_simptemp_exit(void)
-{
+// static void __exit nxp_simptemp_exit(void)
+// {
 
-    printk(KERN_INFO "NXP SimTemp: Modulo descargado. Adios.\n");
+//     printk(KERN_INFO "NXP SimTemp: Modulo descargado. Adios.\n");
 
-}
+// }
 
-static int __init nxp_simptemp_init(void)
-{
-    printk(KERN_INFO "NXP SimTemp: Modulo cargado exitosamente. Entorno listo.\n");
-    return 0;
-}
+// static int __init nxp_simptemp_init(void)
+// {
+//     printk(KERN_INFO "NXP SimTemp: Modulo cargado exitosamente. Entorno listo.\n");
+//     return 0;
+// }
 
 //************* Macros (always placed al the end of the code for Linux )************************** */
 
 //module_init(nxp_simptemp_init); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
-//module_platform_driver(nxp_simtemp_driver);   //Macro for driver that evolves the platform driver with probe/evolve
+module_platform_driver(nxp_simtemp_driver);   //Macro for driver that evolves the platform driver with probe/evolve
 //module_exit(nxp_simptemp_exit); // [Kernel] Macro for indicate to kernel what funtion must be called to unload the module nxp_simtemp_exit
