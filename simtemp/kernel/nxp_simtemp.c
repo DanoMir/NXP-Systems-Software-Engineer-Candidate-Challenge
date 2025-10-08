@@ -34,7 +34,7 @@
 #include <linux/time.h>             //Timer for simulation
 #include <linux/of.h>               //Device Tree    
 
-//#include <linux/mod_devicetable.h>
+#include <linux/mod_devicetable.h>
 #include <linux/device.h>
 
 MODULE_LICENSE("GPL");
@@ -58,8 +58,8 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 static void nxp_simtemp_remove(struct platform_device *pdev);                                       //Function Prototype [Kernel] structure from "platform_device.h"
 static int nxp_simtemp_probe(struct platform_device *pdev);                                         //Function Prototype [Kernel] structure from "platform_device.h"
 
-static void __exit nxp_simtemp_exit(void);
-static int __init nxp_simtemp_init(void);
+//static void __exit nxp_simtemp_exit(void);
+//static int __init nxp_simtemp_init(void);
 
 
 //--------------------------Data Structure---------------------------------------
@@ -179,9 +179,9 @@ static const struct of_device_id nxp_simtemp_dt_match[]=
 
 //-----------Platform Driver: ----- Driver Starter --------------------
 //Indicates to Platform Driver from kernel How to manipulates this data from Driver
-// static struct platform_driver nxp_simtemp_driver=//  ORIGINAL
+static struct platform_driver nxp_simtemp_driver=
 
-extern struct platform_driver nxp_simtemp_driver=//DEBUG
+//extern struct platform_driver nxp_simtemp_driver=
 {
     .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp, simtemp)
     .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
@@ -265,7 +265,7 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
 static int nxp_simtemp_probe(struct platform_device *pdev)
 {
-    printk(KERN_INFO "Fase0\n");
+    printk(KERN_INFO "Debug 0\n");
     struct nxp_simtemp_dev *nxp_dev; 
     int ret;
 
@@ -348,18 +348,20 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
 }
 
 //---------------------First Functions for compilation ---------------------
+
+//[logic] This function calls to platform_driver_register(&nxp_simtemp_driver)
 static int __init simtemp_runtime_init(void)
 {
    int ret;
     
-    // 1. Registrar el platform_driver (Esto hace que tu probe esté listo)
+    // 1. Register platform driver (for probe() is ready)
     ret = platform_driver_register(&nxp_simtemp_driver);
     if (ret) {
         printk(KERN_ERR "NXP SimTemp: Failed to register platform driver. Ret: %d\n", ret);
         return ret;
     }
 
-    // 2. Asignar memoria para el dispositivo virtual
+    // 2. Memoru allocation for virtual device.
     simtemp_pdev = platform_device_alloc("nxp_simtemp", PLATFORM_DEVID_NONE);
     if (!simtemp_pdev) {
         printk(KERN_ERR "NXP SimTemp: Failed to allocate platform device.\n");
@@ -367,7 +369,7 @@ static int __init simtemp_runtime_init(void)
         return -ENOMEM;
     }
     
-    // 3. Añadir el dispositivo virtual (ESTO FUERZA LA LLAMADA A nxp_simtemp_probe)
+    // 3. Add virtual device (forces to call to nxp_simtemp_probe())
     ret = platform_device_add(simtemp_pdev);
     if (ret) {
         printk(KERN_ERR "NXP SimTemp: Failed to add virtual platform device. Ret: %d\n", ret);
@@ -376,7 +378,7 @@ static int __init simtemp_runtime_init(void)
         return ret;
     }
 
-    // Si el probe tiene éxito, este log aparecerá:
+    // If call to nxp_simtemp_probe() was successful:
     printk(KERN_INFO "NXP SimTemp: Virtual device and driver registered successfully.\n");
     return 0;
 
@@ -389,30 +391,15 @@ static void __exit simtemp_runtime_exit(void)
 {
     platform_device_unregister(simtemp_pdev);
     platform_driver_unregister(&nxp_simtemp_driver);
-    printk(KERN_INFO "NXP SimTemp: Modulo descargado. Adios.\n");
+    printk(KERN_INFO "NXP SimTemp: Modulo unloades. Bye.\n");
 
 }
 
 
-// static void __exit nxp_simptemp_exit(void)
-// {
-
-//     printk(KERN_INFO "NXP SimTemp: Modulo descargado. Adios.\n");
-
-// }
-
-// static int __init nxp_simptemp_init(void)
-// {
-//     printk(KERN_INFO "NXP SimTemp: Modulo cargado exitosamente. Entorno listo.\n");
-//     return 0;
-// }
 
 //************* Macros (always placed al the end of the code for Linux )************************** */
 
-//module_init(nxp_simptemp_init); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
-//module_platform_driver(nxp_simtemp_driver);   //Macro for driver that evolves the platform driver with probe/evolve
-//module_exit(nxp_simptemp_exit); // [Kernel] Macro for indicate to kernel what funtion must be called to unload the module nxp_simtemp_exit
+
 
 module_init(simtemp_runtime_init); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
-//module_platform_driver(nxp_simtemp_driver);   //Macro for driver that evolves the platform driver with probe/evolve
-module_exit(simtemp_runtime_exit);
+module_exit(simtemp_runtime_exit); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
