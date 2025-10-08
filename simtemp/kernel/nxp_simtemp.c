@@ -339,7 +339,7 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
     //misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
     //Memory automatically is liberated by devm_kzalloc
 
-  
+    
 
     if(nxp_dev)
     {
