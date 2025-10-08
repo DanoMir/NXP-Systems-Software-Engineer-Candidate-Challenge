@@ -26,8 +26,6 @@ This repository contains a project for a challenge by NXP.
 * 
 
 ### Information Sharing 
-* Procedure for module developers to handle wakeup is [described here](http://git.bh.de.conti.de/jcp2016/dev/blob/develop/doc/wakeup.md).
+
 
 ## About
-> This document is written in [markdown](http://en.wikipedia.org/wiki/Markdown) due to the GitLab server can transform this into HTML on the fly.
-> A full explanation on server render capability and the syntax is [described here](http://git.bh.de.conti.de/help/markdown/markdown.md).
