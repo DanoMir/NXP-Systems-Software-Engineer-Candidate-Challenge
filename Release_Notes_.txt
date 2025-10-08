@@ -7,7 +7,7 @@ ____________________________________________________________
 (x)GIT ()JAZZ 
 
 
-Repository Path: https://github-vni.geo.conti.de/s4-gm-hud1/sw.sys.hud_c1xx
+Repository Path: https://github.com/DanoMir/NXP-Systems-Software-Engineer-Candidate-Challenge.git
 
 Flash files: \\
 Source Code: \\
@@ -21,7 +21,7 @@ Location:   GDL (X)
 Issued by:  Daniel Miranda
 
 
-Issues in version: v06.20.rel
+Issues in version: v01
 Git Tag: 
 
 #		Ticket			Summary
@@ -31,8 +31,8 @@ Git Tag:
 01	Ticket_28-09-2025 - [DIM] Dimming curve is not being saved correctly.
 01	Ticket_29-09-2025 - [DIM] Dimming curve is not being saved correctly.
 01	Ticket_30-09-2025 - [INSTALL] Drivers and Modules Installation for Virtual Machine 
-01	Ticket_01-10-2025 - [DIM] Dimming curve is not being saved correctly.
-01	Ticket_02-10-2025 - [DIM] Dimming curve is not being saved correctly.
+01	Ticket_01-10-2025 - [INSTALL] Drivers and Modules Installation for Virtual Machine.
+01	Ticket_02-10-2025 - [INSTALL] Drivers and Modules Installation for Virtual Machine
 01	Ticket_03-10-2025 - [DIM] Dimming curve is not being saved correctly.
 01	Ticket_04-10-2025 - [DIM] Dimming curve is not being saved correctly.
 01	Ticket_05-10-2025 - [DIM] Dimming curve is not being saved correctly.
@@ -59,34 +59,10 @@ Git Tag:
 01	Ticket_26-10-2025 - [DIM] Dimming curve is not being saved correctly.
 
 
-02	[UGB-7654] - [SYVAL] Fix autotst output report.
-03	[UGB-7719] - [SW Integration] Official Release v06.20.rel.
-04	[UGB-7669] - [SW Integration] Internal Release v06.20.pre01.
-05	[UGB-7655] - [INTEGRATION] BVT test after HW relocation.
-06	[UGB-7628] - [VDI] Retry mechanism for CRHDL.
-07	[UGB-7630] - [DCL] Retry mechanism for CRHDL.
-08	[UGB-7640] - [VDI] Change address 0x18 to read ECU Customer Part Number.
-09	[UGB-7694] - [DIM] Dimming curve is not being saved correctly.
-10	[UGB-7634] - [DIM] Fix warnings found in Klocwork report from 06.10.rel.
-11	[UGB-7635] - [DIAGHDL] Fix warnings found in Klocwork report from 06.10.rel.
-12	[UGB-7636] - [MIR] Fix warnings found in Klocwork report from 06.10.rel.
-13	[UGB-7637] - [DTC] Fix autotst failed tests.
-14	[UGB-7722] - BVT Relocation.
-15	[UGB-7747] - [EEPROM] Change Force Dimming Level default value.
-16	[UGB-7729] - [EXEATOOL] Use standard hex library.
-17	[UGB-7742] - [AUTOTST] Update to remove exea before start a test.
-18	[UGB-7762] - [INTEGRATION] Update Bootloader.
-19	[UGB-7771] - [EEPROM] Update Customer Part Number.
-20	[UGB-7651] - Create script for AUTOTST execution automation.
-21	[UGB-7652] - Create script for EEPROM FAR validation.
-22	[UGB-7653] - Create EOL-ISB3 output for VID script.
 
 
+Unit Under Test: 
 
 
-
-Unit Under Test: GM O1SL [A3C0768190700] 
-
-
-Simulation Tool: VCU Simulator v2.6.0 (Released)
-Toolbox        : EVM v2.0 					*
+Simulation Tool: 
+Toolbox        : 					*
