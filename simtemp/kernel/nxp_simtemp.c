@@ -56,7 +56,9 @@ static int nxp_simtemp_release(struct inode *inode, struct file *file);         
 static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos);   //Function Prototype performed when User Space calls to read().  
 static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait);                //Function Prototype performed when User Space calls to poll(), select() or epoll().
 static void nxp_simtemp_remove(struct platform_device *pdev);                                       //Function Prototype [Kernel] structure from "platform_device.h"
-static int nxp_simtemp_probe(struct platform_device *pdev);                                         //Function Prototype [Kernel] structure from "platform_device.h"
+static int nxp_simtemp_probe(struct platform_device *pdev);  
+
+static void simtemp_timer_setup(struct nxp_simtemp_dev *dev);//Function Prototype [Kernel] structure from "platform_device.h"
 
 //static void __exit nxp_simtemp_exit(void);
 //static int __init nxp_simtemp_init(void);
@@ -122,47 +124,47 @@ static struct platform_device *simtemp_pdev;
 // ---------------------- (SimTemp Functions)  ---------------------------------------
 
 //Logic Prototypes (SimTemp Function-Ring Buffer State): Verifies if ring buffer is empty, useful for read() and poll())
-// static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev)
-// {
-//     return (dev->rb.count == 0);
+static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev)
+{
+    return (dev->rb.count == 0);
 
-// }
+}
 
 //Logic Prototypes (SimTemp Function-Buffer Push): Push Function for write a new sample called by hrtimer[kernel] (Producer)
 //simtemp_buffer_push is a function by hrtimer().
 
-// static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample)
-// {
-//     //Overwriting Logic, If buffer is full, 
-//     if(dev->rb.count == RING_BUFFER_SIZE) //Overwrite
-//     {
-//         dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
-//         dev->rb.count--;
-//         printk(KERN_WARNING "NXP SimTemp: Buffer overflow, discarded sample.\n");
+static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample)
+{
+    //Overwriting Logic, If buffer is full, 
+    if(dev->rb.count == RING_BUFFER_SIZE) //Overwrite
+    {
+        dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
+        dev->rb.count--;
+        printk(KERN_WARNING "NXP SimTemp: Buffer overflow, discarded sample.\n");
 
 
-//     }
-//     //Algorithm of sample writing through module (Wrap Around)
-//     dev->rb.buffer[dev->rb.head] = *sample;
-//     dev->rb.head = (dev->rb.head + 1) % RING_BUFFER_SIZE;
-//     dev->rb.count++; 
-// }
+    }
+    //Algorithm of sample writing through module (Wrap Around)
+    dev->rb.buffer[dev->rb.head] = *sample;
+    dev->rb.head = (dev->rb.head + 1) % RING_BUFFER_SIZE;
+    dev->rb.count++; 
+}
 
-// //Logic Prototypes (SimTemp Function-Pop): Read and remove the oldest sample (Called by read() function)
-// static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample)
-// {
-//     if(simtemp_buffer_is_empty(dev))
-//     {
-//         return false; //If nothing to read
-//     }
+//Logic Prototypes (SimTemp Function-Pop): Read and remove the oldest sample (Called by read() function)
+static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample)
+{
+    if(simtemp_buffer_is_empty(dev))
+    {
+        return false; //If nothing to read
+    }
 
-//     //Copy the data and the queue moves forward
-//     *sample = dev->rb.buffer[dev->rb.tail];
-//     dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
-//     dev->rb.count--;
+    //Copy the data and the queue moves forward
+    *sample = dev->rb.buffer[dev->rb.tail];
+    dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
+    dev->rb.count--;
 
-//     return true; //If reading was successful
-// }
+    return true; //If reading was successful
+}
 
 // ------------    Platform Driver     ------------------------------------
 // //------------Final register of Driver------------------------//
@@ -274,8 +276,8 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     dev_info(dev,"Debug 1 Probar Inicio\n");
 
     //Memory Allocation: Allocates and clean memory for structure nxp_simtemp_dev.
-    //nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
-    nxp_dev = kzalloc(sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
+    nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
+    //nxp_dev = kzalloc(sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
     if (!nxp_dev)
     {
         dev_err(dev, "Debug 2 Memory allocation failed\n");
@@ -312,7 +314,7 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     if (ret)
     {
         dev_err(dev, "Debug 6. Error registrando miscdevice\n");
-        kfree(nxp_dev);//Liberacion manual de memoria
+        //kfree(nxp_dev);//Liberacion manual de memoria
         return ret;
     }
 
@@ -333,16 +335,27 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
     struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //[Kernel] structure from "platform_device.h"
 
     //Clean Unload [kernel]: Stops timer and desregister all
-    hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
-    misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
+    //hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
+    //misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
     //Memory automatically is liberated by devm_kzalloc
+
+  
 
     if(nxp_dev)
     {
-        kfree(nxp_dev); //Liberacion manual de memoria
+        
+        // 3. Desregistrar la Interfaz
+        misc_deregister(&nxp_dev->mdev);
+        // 2. Detener el Productor (¡CRÍTICO!)
+        // Esta línea detiene el hrtimer inicializado en probe.
+        //hrtimer_cancel(&nxp_dev->timer); 
+        
+         
+
+        dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
     }
     
-    dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n"); //[Kernel] Attachs device name with message log
+    //dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n"); //[Kernel] Attachs device name with message log
     
 
 }
@@ -361,7 +374,7 @@ static int __init simtemp_runtime_init(void)
         return ret;
     }
 
-    // 2. Memoru allocation for virtual device.
+    // 2. Memory allocation for virtual device.
     simtemp_pdev = platform_device_alloc("nxp_simtemp", PLATFORM_DEVID_NONE);
     if (!simtemp_pdev) {
         printk(KERN_ERR "NXP SimTemp: Failed to allocate platform device.\n");
@@ -389,8 +402,9 @@ static int __init simtemp_runtime_init(void)
 
 static void __exit simtemp_runtime_exit(void)
 {
-    platform_device_unregister(simtemp_pdev);
-    platform_driver_unregister(&nxp_simtemp_driver);
+    //for Clean Unload. Cleaning in inverse order.
+    platform_device_unregister(simtemp_pdev);          //
+    platform_driver_unregister(&nxp_simtemp_driver);   //
     printk(KERN_INFO "NXP SimTemp: Modulo unloades. Bye.\n");
 
 }
