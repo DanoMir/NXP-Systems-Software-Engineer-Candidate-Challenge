@@ -121,11 +121,14 @@ static void simtemp_timer_setup(struct nxp_simtemp_dev *dev)
     //Period is defined by default (100ms)
     dev->period_ns = ms_to_ktime(dev->sampling_ms);
 
-    //hrtimer is initialized
+    //Timer is initialized
     hrtimer_init(&dev->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL); 
-    dev->timer.function = simtemp_timer_callback;
 
-    //hrtimer starts
+    //Assigns pointer to function every time timer is triggered
+    dev->timer.function = simtemp_timer_callback; //Data producer where the sample is generated and Ring Buffer is full. 
+
+    //Kernel starts to perform Timer in time interval defined
+    //Timer starts
     hrtimer_start(&dev->timer, dev->period_ns, HRTIMER_MODE_REL);
 
     
@@ -210,6 +213,8 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
     return true; //If reading was successful
 }
 
+//----------------Function generates a sample  ---------------------------------------
+//Generates a sample (struct simtemp_sample) each (sampling_ms)
 enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer)
 {
 
@@ -225,18 +230,18 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer)
     //Ensuring atomicity
     spin_lock_irqsave(&dev->lock, flags);
 
-    //Data logic simtemp_buffer_push is defined
-    simtemp_buffer_push(dev, &sample);
+    //Data logic. Writes the sample in Ring Buffer through overwritting
+    simtemp_buffer_push(dev, &sample);  //If buffer is full moving the tail if necessary
 
-    //Notifications
-
-    wake_up_interruptible(&dev->wq);
+    
+    //Wake-up the processes (read/poll) that are slept in Wait Queue (wq)
+    wake_up_interruptible(&dev->wq); //Notifications
     dev->updates_count++;
 
+    //Liberates the spin_unlock() adquired by simtemp_call_back() o read() rutine.
     spin_unlock_irqrestore(&dev->lock, flags);
 
     //Timer reassemble
-
     hrtimer_forward_now(timer,dev->period_ns);
 
     return HRTIMER_RESTART;
