@@ -7,8 +7,18 @@ from datetime import datetime
 # Kernel Structure
 #
 
-SAMPLE_FORMAT = 16
+#Defines the exact binary format you expect to receive from Kernel
+#Matching with 'simtemp_sample' struct
+# = ensures the standard data alineation
+# Q u64 timestamp in nanoseconds
+# i s32 temperature in mili-grades.
+# I u32 flags
+SAMPLE_FORMAT = '=QiI'
+
+#Total size for structure (16 bytes) for Character Device.
 SAMPLE_SIZE = struct.calcsize(SAMPLE_FORMAT)
+
+#Exact path of device node that Driver creates in System
 DEVICE_PATH = '/dev/simtemp'
 TEMP_DIVISOR = 1000.0           #Converts m°C to °C
 
@@ -17,12 +27,17 @@ def read_telemetry():
     print(f"Waiting for data on {DEVICE_PATH}. Press Ctrl+C to Stop")
     
     try:
-        # Open device in binary mode (rb)
+        # Opening the interface, calls to nxp_simtemp_open in Driver
+        # Open device in binary mode (rb) binary reading byte to byte
         with open(DEVICE_PATH, 'rb') as f:
             while True:   
                 # Reads the exact size of binary sample.
+                # Calls to function nxp_simtemp_read.
+                # Waits and expect 16 bytes
                 data = f.read(SAMPLE_SIZE)
                 
+                # Verification.
+                # Confirmes that a complete package of Kernel are received.
                 if len(data) == SAMPLE_SIZE:
                     #Bynary Data are unpacked
                     timestamp_ns, temp_mC, flags = struct.unpack(SAMPLE_FORMAT, data)
@@ -50,7 +65,7 @@ def read_telemetry():
     except KeyboardInterrupt:
         print("\n Reader stopped by user.")
         os._exit(0) #Clean output
-    excepy Exception as e:
+    except Exception as e:
         print(f"An unexpected error ocurred: {e}")
         
 if __name__ == "__main__":
