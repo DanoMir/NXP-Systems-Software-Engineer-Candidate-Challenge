@@ -58,10 +58,16 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 static void nxp_simtemp_remove(struct platform_device *pdev);                                       //Function Prototype [Kernel] structure from "platform_device.h"
 static int nxp_simtemp_probe(struct platform_device *pdev);  
 
-static void simtemp_timer_setup(struct nxp_simtemp_dev *dev);//Function Prototype [Kernel] structure from "platform_device.h"
-
+//static void simtemp_timer_setup(struct nxp_simtemp_dev *dev);//Function Prototype [Kernel] structure from "platform_device.h"
+enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer);
 //static void __exit nxp_simtemp_exit(void);
 //static int __init nxp_simtemp_init(void);
+
+// // //----------------------Logic Prototypes fo Functions [Logic]------------------
+// static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev);
+// static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample);
+//static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample);
+// static void simtemp_buffer_init(struct simtemp_ring_buffer *rb);
 
 
 //--------------------------Data Structure---------------------------------------
@@ -107,6 +113,30 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
 
 };
 
+//-----------cambios void por aca
+//----Timer callback (Data Generator)
+//Timer Intializer function
+static void simtemp_timer_setup(struct nxp_simtemp_dev *dev)
+{
+    //Period is defined by default (100ms)
+    dev->period_ns = ms_to_ktime(dev->sampling_ms);
+
+    //hrtimer is initialized
+    hrtimer_init(&dev->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL); 
+    dev->timer.function = simtemp_timer_callback;
+
+    //hrtimer starts
+    hrtimer_start(&dev->timer, dev->period_ns, HRTIMER_MODE_REL);
+
+    
+}
+
+//--------------inicio de mover enum 1
+//---------------------------------------------aqui
+//--------------fin de mover enum 1
+
+
+
 //--------------*DEBUG*----------------
 
 static struct platform_device *simtemp_pdev;
@@ -115,11 +145,36 @@ static struct platform_device *simtemp_pdev;
 
 //------------END DEBUG------------------
 
-//----------------------Logic Prototypes fo Functions [Logic]------------------
-//static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev);
-//static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample);
-//static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample);
+// //----------------------Logic Prototypes fo Functions [Logic]------------------
+static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev);
+static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample);
+static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample);
+static void simtemp_buffer_init(struct simtemp_ring_buffer *rb);
 
+//---Ring Buffer Logic Initialization-----------------
+static void simtemp_buffer_init(struct simtemp_ring_buffer *rb)
+{
+    //Initializes Writing Pointer (Head)
+    rb->head = 0;
+
+    //Initializes Reading Pointer (Tail)
+    rb->head = 0;
+
+    //Initializes Writing Pointer (Counter)
+    rb->count = 0;
+
+    //Maybe memset to clean buffer.
+
+
+}
+
+//--------------cambios de void inicio
+
+
+//--------------cambios de void fin
+
+
+//-----------------fin de cambios void
 
 // ---------------------- (SimTemp Functions)  ---------------------------------------
 
@@ -164,6 +219,38 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
     dev->rb.count--;
 
     return true; //If reading was successful
+}
+
+enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer)
+{
+
+    struct nxp_simtemp_dev *dev = container_of(timer, struct nxp_simtemp_dev, timer);
+    struct simtemp_sample   sample;
+    unsigned long flags;
+
+    //Data Generation
+    sample.timestamp_ns = ktime_get_ns();
+    sample.temp_mC = 4000 + (jiffies % 5000);
+    sample.flags = SAMPLE_AVAILABLE;
+
+    //Ensuring atomicity
+    spin_lock_irqsave(&dev->lock, flags);
+
+    //Data logic simtemp_buffer_push is defined
+    simtemp_buffer_push(dev, &sample);
+
+    //Notifications
+
+    wake_up_interruptible(&dev->wq);
+    dev->updates_count++;
+
+    spin_unlock_irqrestore(&dev->lock, flags);
+
+    //Timer reassemble
+
+    hrtimer_forward_now(timer,dev->period_ns);
+
+    return HRTIMER_RESTART;
 }
 
 // ------------    Platform Driver     ------------------------------------
@@ -267,7 +354,7 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
 static int nxp_simtemp_probe(struct platform_device *pdev)
 {
-    printk(KERN_INFO "Debug 0\n");
+    printk(KERN_INFO "Debug 0 Initializes probe() function\n");
     struct nxp_simtemp_dev *nxp_dev; 
     int ret;
 
@@ -295,6 +382,18 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
 
     dev_info(dev,"Debug 5 Primitives intialized\n");
+
+
+    //---------------hrtimer implementation---------------
+
+    //Initializes Ring Buffer
+    simtemp_buffer_init(&nxp_dev->rb); //Buffer initialized
+
+    //Producer start
+    //hrtimer_init() and hrtimer_start() are initialized
+    simtemp_timer_setup(nxp_dev);
+
+
 
     //Device Tree parsing Configuration (By default)
 
@@ -348,7 +447,7 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
         misc_deregister(&nxp_dev->mdev);
         // 2. Detener el Productor (¡CRÍTICO!)
         // Esta línea detiene el hrtimer inicializado en probe.
-        //hrtimer_cancel(&nxp_dev->timer); 
+        hrtimer_cancel(&nxp_dev->timer); 
         
          
 
