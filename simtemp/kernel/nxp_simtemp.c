@@ -113,8 +113,8 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
 
 };
 
-//-----------cambios void por aca
-//----Timer callback (Data Generator)
+
+//---------------Timer Callback (Data Generator)------------------------------------------
 //Timer Intializer function
 static void simtemp_timer_setup(struct nxp_simtemp_dev *dev)
 {
@@ -131,13 +131,8 @@ static void simtemp_timer_setup(struct nxp_simtemp_dev *dev)
     
 }
 
-//--------------inicio de mover enum 1
-//---------------------------------------------aqui
-//--------------fin de mover enum 1
 
 
-
-//--------------*DEBUG*----------------
 
 static struct platform_device *simtemp_pdev;
 
@@ -168,13 +163,7 @@ static void simtemp_buffer_init(struct simtemp_ring_buffer *rb)
 
 }
 
-//--------------cambios de void inicio
 
-
-//--------------cambios de void fin
-
-
-//-----------------fin de cambios void
 
 // ---------------------- (SimTemp Functions)  ---------------------------------------
 
@@ -253,12 +242,12 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer)
     return HRTIMER_RESTART;
 }
 
-// ------------    Platform Driver     ------------------------------------
-// //------------Final register of Driver------------------------//
-//---------------- File Prototypes--------------------------------
+// --------------------    Platform Driver     ------------------------------------
+// ------------      Final register of Driver------------------------//
+//----------------        File Prototypes--------------------------------
 
 //-----------Platform Driver: ----- Hardware --------------------
-// //--------Structure for Device Tree Matching------------------//
+// //--------Structure for Device Tree (Matching)------------------//
 static const struct of_device_id nxp_simtemp_dt_match[]=
 {
     {   .compatible = "nxp,simtemp"},
@@ -269,8 +258,6 @@ static const struct of_device_id nxp_simtemp_dt_match[]=
 //-----------Platform Driver: ----- Driver Starter --------------------
 //Indicates to Platform Driver from kernel How to manipulates this data from Driver
 static struct platform_driver nxp_simtemp_driver=
-
-//extern struct platform_driver nxp_simtemp_driver=
 {
     .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp, simtemp)
     .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
@@ -282,16 +269,12 @@ static struct platform_driver nxp_simtemp_driver=
     },
 };
 
-// //---------File Operations Table: Functions map of driver-----------------
+// //---------File Operations Table: Functions for Driver Map-----------------
 
-//**********  File Prototypes******************
-// "struct file_operations" [kernel]: Data Type provides by kernel. Contains all the pointers to the function that the driver performed to interact with files system of Linux (Kernel)
-
-
-
-
-//-----------------------------   Platform Driver: Interface Contract API .   nxp_simtemp_fops     --------------------------------------------------------------------
+//----------------------- Files Prototypes------------------------------
+//------Platform Driver: Interface Contract API .   nxp_simtemp_fops     --------------------------------------------------------------------
 //Pointers table to functions
+// "struct file_operations" [kernel]: Data Type provides by kernel. Contains all the pointers to the function that the driver performed to interact with files system of Linux (Kernel)
 // "file_operations"[kernel]: Standard Template definied by Linux for Character Devices (/dev)
 // "nxp_simtemp_fops" [logic]: Variable provides by implemented logic only visible inside this file (static). 
 static const struct file_operations nxp_simtemp_fops =
@@ -345,10 +328,6 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 }
 
 
-
-
-
-
 //------------------ Platform Device     Functions     -----------------------------------/
 // ----------- Platform Device: Drive Functions (Lifecycle)----------------------------------------/
 
@@ -364,7 +343,6 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 
     //Memory Allocation: Allocates and clean memory for structure nxp_simtemp_dev.
     nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
-    //nxp_dev = kzalloc(sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
     if (!nxp_dev)
     {
         dev_err(dev, "Debug 2 Memory allocation failed\n");
@@ -378,7 +356,7 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     
     
     //Initializes primitives for spinlock and wait_queue.
-    spin_lock_init(&nxp_dev->lock); //Initialize spinlock [Kernel Function]
+    spin_lock_init(&nxp_dev->lock);     //Initialize spinlock [Kernel Function]
     init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
 
     dev_info(dev,"Debug 5 Primitives intialized\n");
@@ -389,26 +367,24 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     //Initializes Ring Buffer
     simtemp_buffer_init(&nxp_dev->rb); //Buffer initialized
 
-    //Producer start
-    //hrtimer_init() and hrtimer_start() are initialized
+    //Producer start: hrtimer_init() and hrtimer_start() are initialized.
+    //Initialize the producer Timer
     simtemp_timer_setup(nxp_dev);
 
 
-
-    //Device Tree parsing Configuration (By default)
-
+    //Device Tree Configuration (By default)
     nxp_dev->sampling_ms = 100;
     nxp_dev->threshold_mC = 45000;
 
 
     //Register miscdevice (/dev/simtemp).
     //Register of Character Device
-
     nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
     nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
     nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations Table from nxp_simtemp_fops is assigned to Files System of Linux (/dev/simtemp)
 
-    ret = misc_register(&nxp_dev->mdev); //Register the Device Driver and /dev/simtemp is created by kernel .
+    //Register the Device Driver and /dev/simtemp is created by kernel .
+    ret = misc_register(&nxp_dev->mdev); 
 
     if (ret)
     {
@@ -417,10 +393,6 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
         return ret;
     }
 
-    
-
-    //Initialize the producer Timer
-    //simtemp_timer_setup(nxp_dev); //to final
 
     dev_info(dev, "Debug 7\n");
     //dev_info(dev, "NXP SimTemp device registered at /dev/%s\n", nxp_dev->mdev.name );
@@ -443,10 +415,9 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
     if(nxp_dev)
     {
         
-        // 3. Desregistrar la Interfaz
+        // Unregistered Interface: 
         misc_deregister(&nxp_dev->mdev);
-        // 2. Detener el Productor (¡CRÍTICO!)
-        // Esta línea detiene el hrtimer inicializado en probe.
+        // Producer is stopped (hrtimer initialized in probe function)
         hrtimer_cancel(&nxp_dev->timer); 
         
          
@@ -454,7 +425,7 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
         dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
     }
     
-    //dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n"); //[Kernel] Attachs device name with message log
+    
     
 
 }
@@ -501,7 +472,7 @@ static int __init simtemp_runtime_init(void)
 
 static void __exit simtemp_runtime_exit(void)
 {
-    //for Clean Unload. Cleaning in inverse order.
+    //For Clean Unload. Cleaning in inverse order.
     platform_device_unregister(simtemp_pdev);          //
     platform_driver_unregister(&nxp_simtemp_driver);   //
     printk(KERN_INFO "NXP SimTemp: Modulo unloades. Bye.\n");
@@ -510,9 +481,6 @@ static void __exit simtemp_runtime_exit(void)
 
 
 
-//************* Macros (always placed al the end of the code for Linux )************************** */
-
-
-
+//-------------------Macros (always placed al the end of the code for Linux )-------------------------------
 module_init(simtemp_runtime_init); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
 module_exit(simtemp_runtime_exit); // [Kernel] Macro for indicate to kernel what funtion mus be called when the modulo is load nxp_simtemp_init
