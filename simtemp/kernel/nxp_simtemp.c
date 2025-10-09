@@ -177,12 +177,13 @@ static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev)
 
 }
 
-//Logic Prototypes (SimTemp Function-Buffer Push): Push Function for write a new sample called by hrtimer[kernel] (Producer)
-//simtemp_buffer_push is a function by hrtimer().
+//Logic Driver Producer (SimTemp Function-Buffer Push): Push Function for write a new sample called by hrtimer[kernel] (Producer)
+//simtemp_buffer_push is a function by hrtimer() callback.
+//Writes a new sample in Ring Buffer even with overwrite.
 
 static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample)
 {
-    //Overwriting Logic, If buffer is full, 
+    //Algorithm of Overwrite Logic, If buffer is full, 
     if(dev->rb.count == RING_BUFFER_SIZE) //Overwrite
     {
         dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
@@ -191,24 +192,31 @@ static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtem
 
 
     }
+    //After overwriting, new data is writed and Tail and Head is updated.
     //Algorithm of sample writing through module (Wrap Around)
-    dev->rb.buffer[dev->rb.head] = *sample;
-    dev->rb.head = (dev->rb.head + 1) % RING_BUFFER_SIZE;
-    dev->rb.count++; 
+    dev->rb.buffer[dev->rb.head] = *sample;                 //sample value is copied to buffer array in actual position of writing pointer.
+    dev->rb.head = (dev->rb.head + 1) % RING_BUFFER_SIZE;   //if head reaches to end of Ring Buffer, module makes the pointer returns to 0 index.
+    dev->rb.count++;                                        //counter is incremented
 }
 
 //Logic Prototypes (SimTemp Function-Pop): Read and remove the oldest sample (Called by read() function)
+//Consumer Central Routine in [Kernel] Driver
+//Used only in nxp_simtemp_read() function while SpinLock is implemented, ensuring the atomicity.
 static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample)
 {
+    //Verifies if Buffer have data, if empty returns false.
     if(simtemp_buffer_is_empty(dev))
     {
         return false; //If nothing to read
+        //Blocks the process through wait_event_interruptible process
     }
 
     //Copy the data and the queue moves forward
-    *sample = dev->rb.buffer[dev->rb.tail];
-    dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
-    dev->rb.count--;
+    *sample = dev->rb.buffer[dev->rb.tail];     
+    
+    //If Tail reaches the end of the array, returns to 0 index
+    dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;   //Moves Tail one position forward through "wrap-around" with module(%)
+    dev->rb.count--;                                        //Decreases the counter to indicate that sample buffer has been consumed.
 
     return true; //If reading was successful
 }
@@ -319,6 +327,8 @@ return 0;
 }
 
 //nxp_simtemp_read() [Logic] Consumer function for access to producer (hrtimer and Ring Buffer) performed in Kernel
+// *buf: Pointer(char*) to Destination Buffer for RAM memory of User Space reserves to receive the sensor.
+//char __user: Critical Qualifier of [kernel] to indicates this pointer (char*) does not belongs to Kernel.
 static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)      //Prototype of function performed when User Space calls to read().
 {
     //[Logic] Recovers the pointer nxp_dev from open()
@@ -330,45 +340,55 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
     //Ring Buffer [Logic] must be large enough
     if (count < sizeof(sample))
     {
-        return -EINVAL; //Error [kernel]: Buffer too small for sample.
+        return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
     }
 
-    //Block section while Consumer waits to Producer [kernel]
-    //Slepts if buffer is empty. htrimer wakes-up this file(dev-wq).
+    //Block section [kernel] while Consumer waits to Producer 
+    //Slepts or waits in (dev->wq) if buffer is empty. 
+    //htrimer wakes-up this file(dev->wq).
     if(wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
     {
-        return -ERESTARTSYS; //Handles interrution by signal (Ctrl+C).
+        return -ERESTARTSYS; //Error -512 Restart System Call: [kernel] Handles interrution by signal (Ctrl+C). Aborts the operation and returns a error message.
     }
 
-    //Atomic extraction. SpinLoc is acquired
+    //Atomic extraction. SpinLock is acquired
+    //Interrupts are disabled.
+    //hrtimer is locked to avoid to write in Ring Buffer while read() is reading 
+    //Avoids Race Condition.
     spin_lock_irqsave(&dev->lock, flags);
     
-    //copy_to_user
+    //Buffer is readed.
+    //Calls to Ring Buffer [Logic] to extract the oldest data.
     if (simtemp_buffer_pop(dev, &sample))
     {
-        retval = sizeof(sample);
+        retval = sizeof(sample);    //Variable adquires the exact data of sample.
 
     }
     else
     {
-        retval = -EAGAIN; //Only if buffer is empty just before the lock.
+        retval = -EAGAIN; //Error -11 Try Again. [Kernel] Only if buffer is empty just before the lock.
 
     }
 
-    spin_unlock_irqrestore(&dev->lock, flags);       // [Kernel] Liberates SpinLock
+    // [Kernel] Liberates SpinLock.
+    // hrtimer returns to normal execution.
+    spin_unlock_irqrestore(&dev->lock, flags);       
 
     if (retval > 0)
     {
+        //Buffer Transfer [kernel]; Copies the Sample to Memory Direction of User Space Memory
+        //Only allows to write in the buffer *buf of __user type is ONLY this function. 
         if (copy_to_user(buf, &sample, sizeof(sample)))
         {
-            return -EFAULT; //Bad address
+            // If copy fails...
+            return -EFAULT; //-14 [Kernel] Bad address
 
         }
 
 
     }
 
-    return retval; //Returns the number of bytes reaed from (sizeof(sample))
+    return retval; //Returns the number of bytes (sample) in binary form reaed from (sizeof(sample))
 
 }
 
