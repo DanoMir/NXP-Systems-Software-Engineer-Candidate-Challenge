@@ -295,11 +295,17 @@ static const struct file_operations nxp_simtemp_fops =
 
 //------------------ Platform Device     Functions     -----------------------------------/
 // ----------- Platform Device: Interface Functions -------------
-static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function performed once when User Space opens the file /dev/simtemp
-{
-    struct nxp_simtemp_dev *nxp_dev = container_of(file->private_data, struct nxp_simtemp_dev, mdev);
 
-    file->private_data = nxp_dev; //
+//nxp_simtemp_open() [Logic]
+//struct inode *inode (/dev/simtemp) and struct file *file are parameters [kernel]
+//"file" represents the specific instance during the opening
+static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function [Logic] performed once when User Space opens the file /dev/simtemp
+{
+    //Recover the pointer to Global State struct(nxp_simtemp_dev). Useful for the following functions.
+    //container_of [kernel] obtains the pointer (file->private_data) from nxp_simtemp_dev through mdev
+    struct nxp_simtemp_dev *nxp_dev = container_of(file->private_data, struct nxp_simtemp_dev, mdev); 
+
+    file->private_data = nxp_dev; //Stores the Driver Pointer in field (private_data) of structure (file).
 
     return 0;
 }
@@ -312,13 +318,47 @@ static int nxp_simtemp_release(struct inode *inode, struct file *file)  //Protot
 return 0;
 }
 
+//nxp_simtemp_read() [Logic] Consumer function for access to producer (hrtimer and Ring Buffer) performed in Kernel
 static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)      //Prototype of function performed when User Space calls to read().
 {
-    //Block Logic
-    //Ring Buffer
+    //[Logic] Recovers the pointer nxp_dev from open()
+    struct nxp_simtemp_dev *dev = file->private_data; //Asigns the memrory direction revovered from (file->private_data) to dev variable
+    struct simtemp_sample sample;
+    ssize_t retval = 0;                 //    
+    unsigned long flags;            //Saves interruptions states.
+    
+    //Ring Buffer [Logic] must be large enough
+    if (count < sizeof(sample))
+    {
+        return -EINVAL; //Error [kernel]: Buffer too small for sample.
+    }
+    
     //copy_to_user
+    if (simtemp_buffer_pop(dev, &sample))
+    {
+        retval = sizeof(sample);
 
-    return 0; //Returns 0 bytes readed
+    }
+    else
+    {
+        retval = -EAGAIN; //Only if buffer is empty just before the lock.
+
+    }
+
+    spin_unlock_irqrestore(&dev->lock, flags);       // [Kernel] Liberates SpinLock
+
+    if (retval > 0)
+    {
+        if (copy_to_user(buf, &sample, sizeof(sample)))
+        {
+            return -EFAULT; //Bad address
+
+        }
+
+
+    }
+
+    return retval; //Returns the number of bytes reaed from (sizeof(sample))
 
 }
 
@@ -355,7 +395,7 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
         return -ENOMEM; //Without Memory
     }
     dev_info(dev,"Debug 3 Memoria allocated and valid\n");
-    platform_set_drvdata(pdev, nxp_dev); //Guarda puntero
+    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer 
 
     dev_info(dev,"Debug 4 Driver Data Set\n");
     
