@@ -323,7 +323,7 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
 {
     //[Logic] Recovers the pointer nxp_dev from open()
     struct nxp_simtemp_dev *dev = file->private_data; //Asigns the memrory direction revovered from (file->private_data) to dev variable
-    struct simtemp_sample sample;
+    struct simtemp_sample sample;       //Sensor sample
     ssize_t retval = 0;                 //    
     unsigned long flags;            //Saves interruptions states.
     
@@ -332,6 +332,16 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
     {
         return -EINVAL; //Error [kernel]: Buffer too small for sample.
     }
+
+    //Block section while Consumer waits to Producer [kernel]
+    //Slepts if buffer is empty. htrimer wakes-up this file(dev-wq).
+    if(wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
+    {
+        return -ERESTARTSYS; //Handles interrution by signal (Ctrl+C).
+    }
+
+    //Atomic extraction. SpinLoc is acquired
+    spin_lock_irqsave(&dev->lock, flags);
     
     //copy_to_user
     if (simtemp_buffer_pop(dev, &sample))
