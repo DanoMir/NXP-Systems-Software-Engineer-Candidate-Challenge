@@ -114,9 +114,11 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
 };
 
 
-//---------------Timer Callback (Data Generator)------------------------------------------
+//---------------Timer Callback (Data Generator) Producer------------------------------------------
+// Telemetry System
 //Timer Intializer function
-static void simtemp_timer_setup(struct nxp_simtemp_dev *dev)
+// High Precision 'hrtimer' configutration.
+static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_probe()
 {
     //Period is defined by default (100ms)
     dev->period_ns = ms_to_ktime(dev->sampling_ms);
@@ -156,7 +158,7 @@ static void simtemp_buffer_init(struct simtemp_ring_buffer *rb)
     rb->head = 0;
 
     //Initializes Reading Pointer (Tail)
-    rb->head = 0;
+    rb->tail = 0;
 
     //Initializes Writing Pointer (Counter)
     rb->count = 0;
