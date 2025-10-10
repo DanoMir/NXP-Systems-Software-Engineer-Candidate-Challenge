@@ -118,15 +118,18 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
 // Telemetry System
 //Timer Intializer function
 // High Precision 'hrtimer' configutration.
-static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_probe()
+static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_probe(). Here '*dev' pointer is created.
 {
     //Period is defined by default (100ms)
     dev->period_ns = ms_to_ktime(dev->sampling_ms);
 
-    //Timer is initialized
+    //Timer is initialized.
+    // CLOCK_MONOTONIC: Clock from [kernel] independently from changes.
+    // HRTIMER_MODE_REL: Configuration to trigger periodically.
     hrtimer_init(&dev->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL); 
 
     //Assigns pointer to function every time timer is triggered
+    //Timer start
     dev->timer.function = simtemp_timer_callback; //Data producer where the sample is generated and Ring Buffer is full. 
 
     //Kernel starts to perform Timer in time interval defined
@@ -223,38 +226,45 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
     return true; //If reading was successful
 }
 
-//----------------Function generates a sample  ---------------------------------------
-//Generates a sample (struct simtemp_sample) each (sampling_ms)
-enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer)
+//---------------Timer Callback (Data Generator) Producer------------------------------------------
+//------------------Data Producer [Kernel] periodic and precise ------------------ 
+// Activated each time when 'hrtimer' is triggered each 'sampling_ms'
+// Interruption context (Softirq) soft interruption
+enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
 {
-
-    struct nxp_simtemp_dev *dev = container_of(timer, struct nxp_simtemp_dev, timer);
-    struct simtemp_sample   sample;
-    unsigned long flags;
+    // Obtains the memory address of 'nxp_simtemp_dev' through 'struct hrtimer *timer'
+    struct nxp_simtemp_dev *dev = container_of(timer, struct nxp_simtemp_dev, timer); //Macro [kernel] to navigates in memory, obtains the memory address
+    struct simtemp_sample   sample;     // access to timestamp_ns, temp_mC and flags
+    unsigned long flags;                // variable flag
 
     //Data Generation
-    sample.timestamp_ns = ktime_get_ns();
-    sample.temp_mC = 4000 + (jiffies % 5000);
-    sample.flags = SAMPLE_AVAILABLE;
+    sample.timestamp_ns = ktime_get_ns();       //Generates a timestamp in nanoseconds
+    sample.temp_mC = 4000 + (jiffies % 5000);   //jiffies is a [kernel] counter 
+    sample.flags = SAMPLE_AVAILABLE;            //Sets bit 0 to indicate a sample available for Consumer (read()).          
 
-    //Ensuring atomicity
-    spin_lock_irqsave(&dev->lock, flags);
+    //---Start critical section--
+    //Ensuring atomicity (critical)
+    spin_lock_irqsave(&dev->lock, flags);   //Adquires 'Spinlock' and disable interruptions in CPU
 
-    //Data logic. Writes the sample in Ring Buffer through overwritting
+    //Data Writing [Logic]. Writes the sample in Ring Buffer through overwritting
     simtemp_buffer_push(dev, &sample);  //If buffer is full moving the tail if necessary
 
     
-    //Wake-up the processes (read/poll) that are slept in Wait Queue (wq)
-    wake_up_interruptible(&dev->wq); //Notifications
-    dev->updates_count++;
+    //[Kernel] Wake-up the processes (read/poll) that are slept in Wait Queue (wq)
+    wake_up_interruptible(&dev->wq); //Notifies the existence of new data to User Space processes
+    dev->updates_count++;       //Counter for Diagnostic Function
 
-    //Liberates the spin_unlock() adquired by simtemp_call_back() o read() rutine.
-    spin_unlock_irqrestore(&dev->lock, flags);
+    //Liberates 'spin_unlock()' adquired by 'simtemp_call_back()' or 'read()' rutines.
+    spin_unlock_irqrestore(&dev->lock, flags); //Restores the interruptions states.
 
-    //Timer reassemble
-    hrtimer_forward_now(timer,dev->period_ns);
+    //--End critical section---
 
-    return HRTIMER_RESTART;
+
+    //Timer reassemble.
+    //Compensate latency (callback time) and programes the next trigger after (dev->period_ns)
+    hrtimer_forward_now(timer,dev->period_ns); //Mantains the periodicity
+
+    return HRTIMER_RESTART; //Data required by 'hrtimer' API [kernel] to timer comes back 
 }
 
 // --------------------    Platform Driver     ------------------------------------
@@ -312,7 +322,8 @@ static const struct file_operations nxp_simtemp_fops =
 static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function [Logic] performed once when User Space opens the file /dev/simtemp
 {
     //Recover the pointer to Global State struct(nxp_simtemp_dev). Useful for the following functions.
-    //container_of [kernel] obtains the pointer (file->private_data) from nxp_simtemp_dev through mdev
+    //'container_of' [kernel] obtains the pointer (file->private_data) from 'nxp_simtemp_dev' through 'mdev'
+    // Here is created '*nxp_dev' pointer
     struct nxp_simtemp_dev *nxp_dev = container_of(file->private_data, struct nxp_simtemp_dev, mdev); 
 
     file->private_data = nxp_dev; //Stores the Driver Pointer in field (private_data) of structure (file).
