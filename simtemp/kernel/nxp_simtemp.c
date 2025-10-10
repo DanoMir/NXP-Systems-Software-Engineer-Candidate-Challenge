@@ -356,7 +356,7 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
         return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
     }
 
-    //Block section [kernel] while Consumer waits to Producer 
+    //Conditional Blocking section [kernel] while Consumer waits to Producer 
     //Slepts or waits in (dev->wq) if buffer is empty. 
     //htrimer wakes-up this file(dev->wq).
     if(wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
