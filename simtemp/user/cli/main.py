@@ -34,6 +34,7 @@ def read_telemetry():
                 # Reads the exact size of binary sample.
                 # Calls to function nxp_simtemp_read.
                 # Waits and expect 16 bytes
+                # Blocking Reading
                 data = f.read(SAMPLE_SIZE)
                 
                 # Verification.
