@@ -36,6 +36,7 @@
 
 #include <linux/mod_devicetable.h>
 #include <linux/device.h>
+#include <linux/poll.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Daniel Miranda");
@@ -167,8 +168,6 @@ static void simtemp_buffer_init(struct simtemp_ring_buffer *rb)
     rb->count = 0;
 
     //Maybe memset to clean buffer.
-
-
 }
 
 
@@ -317,7 +316,8 @@ static const struct file_operations nxp_simtemp_fops =
 // ----------- Platform Device: Interface Functions -------------
 
 //nxp_simtemp_open() [Logic]
-//struct inode *inode (/dev/simtemp) and struct file *file are parameters [kernel]
+//'struct inode *inode' (/dev/simtemp) 
+//'struct file *file' are parameters [kernel] for Active Sesion Application-Driver
 //"file" represents the specific instance during the opening
 static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function [Logic] performed once when User Space opens the file /dev/simtemp
 {
@@ -339,7 +339,7 @@ static int nxp_simtemp_release(struct inode *inode, struct file *file)  //Protot
 return 0;
 }
 
-//nxp_simtemp_read() [Logic] Consumer function for access to producer (hrtimer and Ring Buffer) performed in Kernel
+//---------nxp_simtemp_read() [Logic]--------- Consumer function for access to producer (hrtimer and Ring Buffer) performed in Kernel
 // *buf: Pointer(char*) to Destination Buffer for RAM memory of User Space reserves to receive the sensor.
 //char __user: Critical Qualifier of [kernel] to indicates this pointer (char*) does not belongs to Kernel.
 static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)      //Prototype of function performed when User Space calls to read().
@@ -405,12 +405,47 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
 
 }
 
+
+//---------nxp_simtemp_poll() [Logic]--------- Events Mechanism--------
+// Register the process like sleeping until data is ready and reports immediately.
+//struct file *file [kernel]: gives access to Driver State to know what resources to protect and which data to verify.
+//struct poll_table_struct *wait [kernel]: Register Mechanism of Callback that register the sleeping process from User Space in queue (wq)
 static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //Prototype of function performed when User Space calls to poll(), select() or epoll().
 {
-    // poll_wait Logic
-    // Return of flags 
+    struct nxp_simtemp_dev *dev = file->private_data; //Saves pointer of Global Structure
+    __poll_t mask = 0;          //Maks for python
+    unsigned long flags;
 
-    return 0; 
+    // [kernel] Register this process in Wait Queue (wq)
+    // Crucial for the process to activate wake_up_interruptible and to be awakened.
+    // Add User Space information to Wait Queue (dev->wq) from Driver
+    //Producer (hrtimer) calls to wake_up_interruptible(&dev->wq), Kernel reviews poll_table and wakes-up the Python Process
+    poll_wait(file, &dev->wq, wait);    // poll_wait Logic [kernel] from poll_table_struct
+
+
+    //Check reading status (Disponible data)
+    if(!simtemp_buffer_is_empty(dev))
+    {
+        //mask to python
+        mask |= (POLLIN | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
+    }
+
+    //Critical section starts that uses a temporal spinlock to access to shared variable 'alerts_count'
+    //Verificates alert events (Threshold)
+    
+    spin_lock_irqsave(&dev->lock, flags);
+
+    if(dev->alerts_count >0)        //Global Variable
+    {
+        mask |= POLLPRI; //PollPriority: Event in high priotity
+    }
+    
+    spin_unlock_irqrestore(&dev->lock, flags);
+    //Critical section ends
+
+    
+    // Return of event mask (0 if must be waiting (sleeping)) or (>0 if wakes-up and performs read() function)
+    return mask; 
 
 
 }
