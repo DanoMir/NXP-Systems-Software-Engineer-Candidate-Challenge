@@ -538,12 +538,15 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
     if(nxp_dev)
     {
         
-        // Unregistered Interface: 
-        misc_deregister(&nxp_dev->mdev);
+      
+        
         // Producer is stopped (hrtimer initialized in probe function)
         hrtimer_cancel(&nxp_dev->timer); 
         
-         
+          // Unregistered Interface: 
+        misc_deregister(&nxp_dev->mdev);
+
+        
 
         dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
     }
