@@ -37,6 +37,8 @@
 #include <linux/mod_devicetable.h>
 #include <linux/device.h>
 #include <linux/poll.h>
+#include <linux/random.h>
+#include <linux/time.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Daniel Miranda");
@@ -235,27 +237,43 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
     struct nxp_simtemp_dev *dev = container_of(timer, struct nxp_simtemp_dev, timer); //Macro [kernel] to navigates in memory, obtains the memory address
     struct simtemp_sample   sample;     // access to timestamp_ns, temp_mC and flags
     unsigned long flags;                // variable flag
+    s32 current_temp;
+    u32 random_offset;
 
     //Data Generation
-    sample.timestamp_ns = ktime_get_ns();       //Generates a timestamp in nanoseconds
-    sample.temp_mC = 4000 + (jiffies % 5000);   //jiffies is a [kernel] counter 
+
+    get_random_bytes(&random_offset, sizeof(random_offset));
+    current_temp = 45000 + (random_offset % 10000 ) - 5000;
+
+    sample.timestamp_ns = ktime_get_real_ns();       //Generates a timestamp in nanoseconds
+    sample.temp_mC = current_temp;   //jiffies is a [kernel] counter 
     sample.flags = SAMPLE_AVAILABLE;            //Sets bit 0 to indicate a sample available for Consumer (read()).          
 
     //---Start critical section--
     //Ensuring atomicity (critical)
     spin_lock_irqsave(&dev->lock, flags);   //Adquires 'Spinlock' and disable interruptions in CPU
 
+    if(current_temp > dev->threshold_mC)
+    {
+        sample.flags |= TRESHOLD_CROSSED;
+        dev->alerts_count++;
+
+    }
+
+
+
     //Data Writing [Logic]. Writes the sample in Ring Buffer through overwritting
     simtemp_buffer_push(dev, &sample);  //If buffer is full moving the tail if necessary
 
-    
-    //[Kernel] Wake-up the processes (read/poll) that are slept in Wait Queue (wq)
-    wake_up_interruptible(&dev->wq); //Notifies the existence of new data to User Space processes
-    dev->updates_count++;       //Counter for Diagnostic Function
+     dev->updates_count++;       //Counter for Diagnostic Function
 
     //Liberates 'spin_unlock()' adquired by 'simtemp_call_back()' or 'read()' rutines.
     spin_unlock_irqrestore(&dev->lock, flags); //Restores the interruptions states.
 
+    //[Kernel] Wake-up the processes (read/poll) that are slept in Wait Queue (wq)
+    wake_up_interruptible(&dev->wq); //Notifies the existence of new data to User Space processes
+   
+    
     //--End critical section---
 
 
@@ -356,12 +374,18 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
         return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
     }
 
-    //Conditional Blocking section [kernel] while Consumer waits to Producer 
-    //Slepts or waits in (dev->wq) if buffer is empty. 
-    //htrimer wakes-up this file(dev->wq).
-    if(wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
+
+    while (simtemp_buffer_is_empty(dev))
     {
-        return -ERESTARTSYS; //Error -512 Restart System Call: [kernel] Handles interrution by signal (Ctrl+C). Aborts the operation and returns a error message.
+        if(file->f_flags & O_NONBLOCK)
+        {
+            return -EAGAIN; 
+        }
+
+        if (wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
+        {
+            return -ERESTARTSYS;
+        }
     }
 
     //Atomic extraction. SpinLock is acquired
@@ -376,9 +400,13 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
     {
         retval = sizeof(sample);    //Variable adquires the exact data of sample.
 
+           if ((sample.flags & TRESHOLD_CROSSED) && dev->alerts_count > 0) {
+                dev->alerts_count--;
+        }
     }
     else
     {
+        
         retval = -EAGAIN; //Error -11 Try Again. [Kernel] Only if buffer is empty just before the lock.
 
     }
@@ -418,7 +446,7 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
     // [kernel] Register this process in Wait Queue (wq)
     // Crucial for the process to activate wake_up_interruptible and to be awakened.
-    // Add User Space information to Wait Queue (dev->wq) from Driver
+    // Add User Space information to Wait Queue (dev->wq) from Driver 
     //Producer (hrtimer) calls to wake_up_interruptible(&dev->wq), Kernel reviews poll_table and wakes-up the Python Process
     poll_wait(file, &dev->wq, wait);    // poll_wait Logic [kernel] from poll_table_struct
 
@@ -427,7 +455,7 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
     if(!simtemp_buffer_is_empty(dev))
     {
         //mask to python
-        mask |= (POLLIN | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
+        mask |= (EPOLLIN | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
     }
 
     //Critical section starts that uses a temporal spinlock to access to shared variable 'alerts_count'
@@ -437,7 +465,7 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
     if(dev->alerts_count >0)        //Global Variable
     {
-        mask |= POLLPRI; //PollPriority: Event in high priotity
+        mask |= EPOLLPRI; //PollPriority: Event in high priotity
     }
     
     spin_unlock_irqrestore(&dev->lock, flags);
