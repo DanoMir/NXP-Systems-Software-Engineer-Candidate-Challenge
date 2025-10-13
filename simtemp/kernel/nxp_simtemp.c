@@ -478,112 +478,6 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
 }
 
-
-//------------------ Platform Device     Functions     -----------------------------------/
-// ----------- Platform Device: Drive Functions (Lifecycle)----------------------------------------/
-
-static int nxp_simtemp_probe(struct platform_device *pdev)
-{
-    printk(KERN_INFO "Debug 0 Initializes probe() function\n");
-    struct nxp_simtemp_dev *nxp_dev; 
-    int ret;
-
-    struct device *dev = &pdev->dev; //se sustituye &pdev->dev por dev (Puntero Local)
-
-    dev_info(dev,"Debug 1 Probar Inicio\n");
-
-    //Memory Allocation: Allocates and clean memory for structure nxp_simtemp_dev.
-    nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
-    if (!nxp_dev)
-    {
-        dev_err(dev, "Debug 2 Memory allocation failed\n");
-        //kfree(nxp_dev);//Liberacion manual de memoria
-        return -ENOMEM; //Without Memory
-    }
-    dev_info(dev,"Debug 3 Memoria allocated and valid\n");
-    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer 
-
-    dev_info(dev,"Debug 4 Driver Data Set\n");
-    
-    
-    //Initializes primitives for spinlock and wait_queue.
-    spin_lock_init(&nxp_dev->lock);     //Initialize spinlock [Kernel Function]
-    init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
-
-    dev_info(dev,"Debug 5 Primitives intialized\n");
-
-
-    //---------------hrtimer implementation---------------
-
-    //Initializes Ring Buffer
-    simtemp_buffer_init(&nxp_dev->rb); //Buffer initialized
-
-    //Producer start: hrtimer_init() and hrtimer_start() are initialized.
-    //Initialize the producer Timer
-    simtemp_timer_setup(nxp_dev);
-
-
-    //Device Tree Configuration (By default)
-    nxp_dev->sampling_ms = 100;
-    nxp_dev->threshold_mC = 45000;
-
-
-    //Register miscdevice (/dev/simtemp).
-    //Register of Character Device
-    nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
-    nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
-    nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations Table from nxp_simtemp_fops is assigned to Files System of Linux (/dev/simtemp)
-
-    //Register the Device Driver and /dev/simtemp is created by kernel .
-    ret = misc_register(&nxp_dev->mdev); 
-
-    if (ret)
-    {
-        dev_err(dev, "Debug 6. Error registrando miscdevice\n");
-        //kfree(nxp_dev);//Liberacion manual de memoria
-        return ret;
-    }
-
-
-    dev_info(dev, "Debug 7\n");
-    //dev_info(dev, "NXP SimTemp device registered at /dev/%s\n", nxp_dev->mdev.name );
-    return 0;
-
-}
-
-//----------------Platform Device: Release function (reverse of probe) (Lifecycle)---------------------------
-static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structure from "platform_device.h"
-{
-    struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //[Kernel] structure from "platform_device.h"
-
-    //Clean Unload [kernel]: Stops timer and desregister all
-    //hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
-    //misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
-    //Memory automatically is liberated by devm_kzalloc
-
-    
-
-    if(nxp_dev)
-    {
-        
-      
-        
-        // Producer is stopped (hrtimer initialized in probe function)
-        hrtimer_cancel(&nxp_dev->timer); 
-        
-          // Unregistered Interface: 
-        misc_deregister(&nxp_dev->mdev);
-
-        
-
-        dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
-    }
-    
-    
-    
-
-}
-
 //----------- sysfs Section-----------------------------
 
 
@@ -747,6 +641,129 @@ static const struct attribute_group nxp_simtemp_attr_group =
     .attrs = nxp_simtemp_attrs,
 
 };
+
+
+
+//------------------ Platform Device     Functions     -----------------------------------/
+// ----------- Platform Device: Drive Functions (Lifecycle)----------------------------------------/
+
+static int nxp_simtemp_probe(struct platform_device *pdev)
+{
+    printk(KERN_INFO "Debug 0 Initializes probe() function\n");
+    struct nxp_simtemp_dev *nxp_dev; 
+    int ret;
+
+    struct device *dev = &pdev->dev; //se sustituye &pdev->dev por dev (Puntero Local)
+
+    dev_info(dev,"Debug 1 Start\n");
+
+    //Memory Allocation: Allocates and clean memory for structure nxp_simtemp_dev.
+    nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
+    if (!nxp_dev)
+    {
+        dev_err(dev, "Debug 2 Memory allocation failed\n");
+        //kfree(nxp_dev);//Liberacion manual de memoria
+        return -ENOMEM; //Without Memory
+    }
+    dev_info(dev,"Debug 3 Memoria allocated and valid\n");
+    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer 
+
+    dev_info(dev,"Debug 4 Driver Data Set\n");
+    
+    
+    //Initializes primitives for spinlock and wait_queue.
+    spin_lock_init(&nxp_dev->lock);     //Initialize spinlock [Kernel Function]
+    init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
+
+    dev_info(dev,"Debug 5 Primitives intialized\n");
+
+
+    //---------------hrtimer implementation---------------
+
+    //Initializes Ring Buffer
+    simtemp_buffer_init(&nxp_dev->rb); //Buffer initialized
+
+    //Producer start: hrtimer_init() and hrtimer_start() are initialized.
+    //Initialize the producer Timer
+    simtemp_timer_setup(nxp_dev);
+
+
+    //Device Tree Configuration (By default)
+    nxp_dev->sampling_ms = 100;
+    nxp_dev->threshold_mC = 45000;
+
+
+    //Register miscdevice (/dev/simtemp).
+    //Register of Character Device
+    nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
+    nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
+    nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations Table from nxp_simtemp_fops is assigned to Files System of Linux (/dev/simtemp)
+
+    //Register the Device Driver and /dev/simtemp is created by kernel .
+    ret = misc_register(&nxp_dev->mdev); 
+
+    if (ret)
+    {
+        dev_err(dev, "Debug 6. Error registered miscdevice\n");
+        //kfree(nxp_dev);//Liberacion manual de memoria
+        return ret;
+    }
+
+    //Syfs Register
+    ret = sysfs_create_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
+
+    if (ret)
+    {
+        dev_err(dev, "Debug 7 Error registered sysfs group\n");
+        misc_deregister(&nxp_dev->mdev);
+        
+        return ret;
+
+    }
+    dev_info(dev, "Debug 8 Device and Syfs registered successfully\n");
+    //dev_info(dev, "NXP SimTemp device registered at /dev/%s\n", nxp_dev->mdev.name );
+    return 0;
+
+}
+
+//----------------Platform Device: Release function (reverse of probe) (Lifecycle)---------------------------
+static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structure from "platform_device.h"
+{
+    struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //[Kernel] structure from "platform_device.h"
+
+    //Clean Unload [kernel]: Stops timer and desregister all
+    //hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
+    //misc_deregister(&nxp_dev->mdev); // [Kernel] Delete Character Device of system files durin the clean remove
+    //Memory automatically is liberated by devm_kzalloc
+
+    
+
+    if(nxp_dev)
+    {
+        
+      
+        
+        // Producer is stopped (hrtimer initialized in probe function)
+        hrtimer_cancel(&nxp_dev->timer); 
+
+
+        //*-------Sysfs Secion */
+        sysfs_remove_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
+
+        
+          // Unregistered Interface: 
+        misc_deregister(&nxp_dev->mdev);
+
+        
+
+        dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
+    }
+    
+    
+    
+
+}
+
 
 
 //---------------------First Functions for compilation ---------------------
