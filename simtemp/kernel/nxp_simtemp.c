@@ -584,6 +584,171 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
 
 }
 
+//----------- sysfs Section-----------------------------
+
+
+
+
+
+//Reading Function: Show
+//Attribute sampling_ms(RW)
+//[SHOW] Reading of the period of actual sample (dev->sampling_ms)
+static ssize_t sampling_ms_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
+    unsigned long flags;
+    ssize_t ret;
+
+    //--------Critical Section: Protects access to shared variable---------
+    spin_lock_irqsave(&nxp_dev->lock, flags);
+    ret = sprintf(buf, "%u\n", nxp_dev->sampling_ms); //Copy value to 'buf'
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    //-------------------End of critical section---------------
+
+    return ret;
+};
+
+//Write Function: Store
+//[STORE]: Writing of new period of sampling (Stops/Restarts hrtimer)
+static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
+    unsigned long value;
+    unsigned long flags;
+    int ret;
+
+    //Converts input(strings) to number
+    ret = kstrtoul(buf, 10, &value);
+    if (ret)
+    {
+        return ret;
+    }
+
+    if(value < 10)
+    {
+        return -EINVAL;
+    }
+
+    //--------Critical Section: Stops, Updates and Restarts the hrtimer---------
+    spin_lock_irqsave(&nxp_dev->lock, flags);
+
+    //Cancel the timer to update period without race conditions
+    hrtimer_cancel(&nxp_dev->timer);
+
+    //Updating the state variables.
+    nxp_dev->sampling_ms = (s32)value;
+    nxp_dev->period_ns = ms_to_ktime(nxp_dev->sampling_ms);
+
+    //Restarts timer with new period.
+    hrtimer_start(&nxp_dev->timer, nxp_dev->period_ns, HRTIMER_MODE_REL);
+
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    //-------------------End of critical section---------------
+
+    return count; //Return number of bytes processed.
+};
+
+//Reading Function: threshold mC Show
+//Attribute threshold_mC(RW): Updates one variable
+//[SHOW] Reading of alert umbral
+static ssize_t threshold_mC_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
+    unsigned long flags;
+    ssize_t ret;
+
+    //--------Critical Section: ---------
+    spin_lock_irqsave(&nxp_dev->lock, flags);
+
+    ret = sprintf(buf, "%d\n", nxp_dev->threshold_mC); 
+
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    //-------------------End of critical section---------------
+
+    return ret; 
+}
+
+
+//Reading Function: threshold mC store
+//Attribute threshold_mC(RW): Updates one variable
+//[SHOW] Writing the new umbral of alert
+static ssize_t threshold_mC_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
+    s32 value;
+    unsigned long flags;
+    int ret;
+
+    //Coonverts string input to int 32 bits
+    ret = kstrtos32(buf, 10, &value);
+    if (ret)
+    {
+        return ret;
+    }
+
+     //--------Critical Section: ---------
+    spin_lock_irqsave(&nxp_dev->lock, flags);
+
+    nxp_dev->threshold_mC = value;
+
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    //-------------------End of critical section---------------
+
+    wake_up_interruptible(&nxp_dev->wq);
+
+    return count; 
+
+
+}
+
+
+//Reading Function: Stats Show
+//Attribute stats(R/O): Shows the counters of diagnostic in existence: updates_count, alerts_count.
+//[SHOW] Reading of statiticals (updates, alerts, last error)
+static ssize_t stats_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
+    unsigned long flags;
+    ssize_t ret;
+
+    //--------Critical Section: ---------
+    spin_lock_irqsave(&nxp_dev->lock, flags);
+
+    //Formats the output like a legible string with all counters.
+    ret = sprintf(buf, "updates = %u\nalerts = %u\nlast error = %d\n", nxp_dev->updates_count, nxp_dev->alerts_count, 0); 
+    
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+
+    
+    //-------------------End of critical section--------------
+
+    return ret; 
+};
+
+//Static definitions of attributes of sysfs
+static DEVICE_ATTR_RW(sampling_ms);      //Read/Write
+static DEVICE_ATTR_RW(threshold_mC);    //Read/Write
+static DEVICE_ATTR_RO(stats);            //Read Only
+
+
+//Attrubutes List to register in probe()
+static struct attribute *nxp_simtemp_attrs[]=
+{
+        &dev_attr_sampling_ms.attr,
+        &dev_attr_threshold_mC.attr,
+        &dev_attr_stats.attr,
+        NULL, 
+        
+};
+
+//Attrbutes for resgistration in subsystem of devices (devices_create_file)
+static const struct attribute_group nxp_simtemp_attr_group =
+{
+    .attrs = nxp_simtemp_attrs,
+
+};
+
+
 //---------------------First Functions for compilation ---------------------
 
 //[logic] This function calls to platform_driver_register(&nxp_simtemp_driver)
