@@ -121,7 +121,7 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
 // Telemetry System
 //Timer Intializer function
 // High Precision 'hrtimer' configutration.
-static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_probe(). Here '*dev' pointer is created.
+static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_probe(). Here 'dev' pointer is created.
 {
     //Period is defined by default (100ms)
     dev->period_ns = ms_to_ktime(dev->sampling_ms);
@@ -441,8 +441,9 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
 static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //Prototype of function performed when User Space calls to poll(), select() or epoll().
 {
     struct nxp_simtemp_dev *dev = file->private_data; //Saves pointer of Global Structure
-    __poll_t mask = 0;          //Maks for python
-    unsigned long flags;
+    
+    __poll_t mask = 0;      //Maks for python
+    unsigned long flags;    //Store and Restore the status of the interruptions.
 
     // [kernel] Register this process in Wait Queue (wq)
     // Crucial for the process to activate wake_up_interruptible and to be awakened.
@@ -478,40 +479,53 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
 }
 
-//----------- sysfs Section-----------------------------
+//--------------------------  Sysfs Section  -----------------------------------
 
+//Object Device, arguments used in all syfs functions:
+//struct device *dev: [Kernel] through syfs. Generic Pointer to Platform Device (simtemp) in Device Tree of Kernel  
+//struct device_attribute *attr: [Kernel] Specific Pointer to Attrbute Definition to identify the file being read (/sys/.../sampling_ms) or (/sys/.../threshold_mC)
+//char *buf: Temporal Memory Buffer by User stored in kernel where Driver writes the output value in string formal.
 
-
-
-
-//Reading Function: Show
-//Attribute sampling_ms(RW)
+//sysfs Section: Reading Function: Show 
+//Attribute (R/W) 'sampling_ms_show' [Kernel]: Pointer .show within 'struct dev_attr_name' is mapped to this function. 
 //[SHOW] Reading of the period of actual sample (dev->sampling_ms)
 static ssize_t sampling_ms_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
-    unsigned long flags;
-    ssize_t ret;
+    //Obtains pointer to Global Structure. 
+    //nxp_simtemp_dev *nxp_dev: Specific context of driver, called fot the first time in nxp_simtemp_probe().
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
+    
+    unsigned long flags;    //Store and Restore the status of the interruptions.
+    ssize_t ret;            //Return Variable
 
     //--------Critical Section: Protects access to shared variable---------
     spin_lock_irqsave(&nxp_dev->lock, flags);
+
+    //Converts binary value of nxp_dev->threshold_mC in string contained in buf
     ret = sprintf(buf, "%u\n", nxp_dev->sampling_ms); //Copy value to 'buf'
+    
     spin_unlock_irqrestore(&nxp_dev->lock, flags);
     //-------------------End of critical section---------------
 
     return ret;
 };
 
-//Write Function: Store
-//[STORE]: Writing of new period of sampling (Stops/Restarts hrtimer)
+//sysfs Section Writing Store Function: sampling_ms_tore [Kernel]: Implemented when the User writes a new time value (milliseconds) to the file: /sys/.../sampling_ms
+//Attribute (R/W) 'sampling_ms_store': Pointer .store within 'struct dev_attr_name' is mapped to this function
+//[STORE] Writing of new period of sampling (Restores Stops/Restarts hrtimer)
+//size_t count: Return of [Kernel] with bytes number processed for buf char. if was successful or error code if negative value
+
 static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
-    unsigned long value;
-    unsigned long flags;
-    int ret;
+    //Obtains pointer to Global Structure. 
+    //nxp_simtemp_dev *nxp_dev: Specific context of driver, called fot the first time in nxp_simtemp_probe().   
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform. 
+    
+    unsigned long value;    //Stores temporarily the numeric value of New Sampling Period through susfs       
+    unsigned long flags;    //Store and Restore the status of the interruptions. 
+    int ret;                //Return Variable
 
-    //Converts input(strings) to number
+    //Converts the input(strings) to numerical value
     ret = kstrtoul(buf, 10, &value);
     if (ret)
     {
@@ -520,7 +534,7 @@ static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *at
 
     if(value < 10)
     {
-        return -EINVAL;
+        return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
     }
 
     //--------Critical Section: Stops, Updates and Restarts the hrtimer---------
@@ -530,50 +544,54 @@ static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *at
     hrtimer_cancel(&nxp_dev->timer);
 
     //Updating the state variables.
-    nxp_dev->sampling_ms = (s32)value;
-    nxp_dev->period_ns = ms_to_ktime(nxp_dev->sampling_ms);
+    nxp_dev->sampling_ms = (s32)value;  //Adapts value to miliseconds for sampling 
+    nxp_dev->period_ns = ms_to_ktime(nxp_dev->sampling_ms); //Converts the sample of ms to ns for hrtimer.
 
     //Restarts timer with new period.
-    hrtimer_start(&nxp_dev->timer, nxp_dev->period_ns, HRTIMER_MODE_REL);
+    hrtimer_start(&nxp_dev->timer, nxp_dev->period_ns, HRTIMER_MODE_REL);   //HRTIMER_MODE_REL: Flag of hrtimer to specify that the time provided is relative with respect to actual time.
 
-    spin_unlock_irqrestore(&nxp_dev->lock, flags);
-    //-------------------End of critical section---------------
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);  //hrtimer is restored with a new time interval.
+    //-------------------  End of critical section  --------------------------
 
     return count; //Return number of bytes processed.
 };
 
-//Reading Function: threshold mC Show
-//Attribute threshold_mC(RW): Updates one variable
-//[SHOW] Reading of alert umbral
+//Reading Function threshold_mC_show: Performed when User Space reads /sys/.../threshold_mC (cat comand...)
+//Attribute (R/W) 'threshold_mC_show': Updates one variable
+//size_t count: Return of [Kernel] with bytes number processed for buf char. if was successful or error code if negative value
+//[SHOW] Reading of alert umbral for sysfs and exposes the internal value of Driver to User Space
 static ssize_t threshold_mC_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
-    unsigned long flags;
-    ssize_t ret;
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
+    
+    unsigned long flags;    //Store and Restore the status of the interruptions.
+    ssize_t ret;            //Return Variable
 
-    //--------Critical Section: ---------
-    spin_lock_irqsave(&nxp_dev->lock, flags);
+    //--------Critical Section: Protects access to shared variable ---------
+    spin_lock_irqsave(&nxp_dev->lock, flags);   //Prevents that hrtimer_callback() access to nxp_dev->threshold_mC
 
-    ret = sprintf(buf, "%d\n", nxp_dev->threshold_mC); 
+    //Converts binary value of nxp_dev->threshold_mC in string contained in buf
+    ret = sprintf(buf, "%d\n", nxp_dev->threshold_mC); //Indicates how many bytes were writes in this buffer.
 
-    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);  //hrtimer is restored with a new time interval.
     //-------------------End of critical section---------------
 
     return ret; 
 }
 
-
-//Reading Function: threshold mC store
-//Attribute threshold_mC(RW): Updates one variable
-//[SHOW] Writing the new umbral of alert
+//sysfs Section
+//Reading Function: threshold mC store [Kernel]
+//Attribute (R/W) 'threshold_mC_store': Pointer .store is mapped to this function Updates one variable
+//[STORE] Writing the new umbral of alert
 static ssize_t threshold_mC_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
-    s32 value;
-    unsigned long flags;
-    int ret;
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
+    s32 value;              //Data Type of Kernel signed 32bits for threshold_mC
+    
+    unsigned long flags;    //Store and Restore the status of the interruptions.
+    int ret;                //Return Variable
 
-    //Coonverts string input to int 32 bits
+    //Converts string input to int 32 bits
     ret = kstrtos32(buf, 10, &value);
     if (ret)
     {
@@ -581,64 +599,75 @@ static ssize_t threshold_mC_store(struct device *dev, struct device_attribute *a
     }
 
      //--------Critical Section: ---------
-    spin_lock_irqsave(&nxp_dev->lock, flags);
+    spin_lock_irqsave(&nxp_dev->lock, flags);   //Prevents that hrtimer_callback() access to nxp_dev->threshold_mC
 
-    nxp_dev->threshold_mC = value;
+    nxp_dev->threshold_mC = value;  //Configuration Changes by User Space for threshold_mC
 
-    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);  //hrtimer is restored with a new time interval.
     //-------------------End of critical section---------------
 
+    
+    //Wakes-up all processes that are currently sleeping in wait queue (wq)
     wake_up_interruptible(&nxp_dev->wq);
 
-    return count; 
+    return count;   //Return number of bytes processed.
 
 
 }
 
-
-//Reading Function: Stats Show
-//Attribute stats(R/O): Shows the counters of diagnostic in existence: updates_count, alerts_count.
-//[SHOW] Reading of statiticals (updates, alerts, last error)
+//sysfs Section - stats_show function [Kernel]: Diagnostic Function. Implements the Diagnostic Attribute of Driver in sysfs
+//Applies a new value to the alert threshold for system monitoring.
+//Attribute (R/O) 'stats': Pointer .show is mapped to this function. Shows the counters of diagnostic in existence: updates_count, alerts_count.
+//[SHOW] Reading of statiticals (updates_count, alerts_count and last errors)
 static ssize_t stats_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev);
-    unsigned long flags;
-    ssize_t ret;
+    struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
+    
+    unsigned long flags;    //Store and Restore the status of the interruptions.
+    ssize_t ret;            //Return Variable
 
     //--------Critical Section: ---------
-    spin_lock_irqsave(&nxp_dev->lock, flags);
+    spin_lock_irqsave(&nxp_dev->lock, flags);   //Prevents that hrtimer_callback() access to nxp_dev->lock
 
     //Formats the output like a legible string with all counters.
     ret = sprintf(buf, "updates = %u\nalerts = %u\nlast error = %d\n", nxp_dev->updates_count, nxp_dev->alerts_count, 0); 
     
-    spin_unlock_irqrestore(&nxp_dev->lock, flags);
+    spin_unlock_irqrestore(&nxp_dev->lock, flags);  //hrtimer is restored with a new time interval.
 
     
     //-------------------End of critical section--------------
 
-    return ret; 
+    return ret; //Returns number of bytes from 'buf'. 
 };
 
+//-----  Syfs Macros  ----
 //Static definitions of attributes of sysfs
-static DEVICE_ATTR_RW(sampling_ms);      //Read/Write
-static DEVICE_ATTR_RW(threshold_mC);    //Read/Write
-static DEVICE_ATTR_RO(stats);            //Read Only
+static DEVICE_ATTR_RW(sampling_ms);     //Read/Write attributes for: 'sampling_ms_show' (Read) and 'sampling_ms_store' (Write) through 'dev_attr_sampling_ms' variable
+static DEVICE_ATTR_RW(threshold_mC);    //Read/Write attributes for: 'threshold_mC_show' (Read) and 'threshold_mC_store' (Wtite) through 'dev_attr_threshold_mC' variable.
+static DEVICE_ATTR_RO(stats);           //Read Only attributes for: 'stats_show' (Read Only) through 'dev_attr_stats' variable
+//Atributes (show) for DEVICE_ATTR_RO and (store) for DEVICE_ATTR_WO are NULL. 
 
+//------- Syfs Control List Driver ----------------
+//  .attrs 'struct attribute_group' contains all Control Files of Syfs
+//              |->  Syfs Macros 'struct device_attribute' contains pointers to functions implemented(.show and .store) for mapping a Driver Function to Sysfs File
+//                                  |-> .attr    'struct attribute' cointains (.mode, .owner, .name etc)
 
-//Attrubutes List to register in probe()
-static struct attribute *nxp_simtemp_attrs[]=
+//[Kernel] Attributes List for 'Virtual Control Files' of Syfs for configuration must be created in (/sys/.../simtemp0) to register in probe()
+//Complete map for all sampling_ms, threshold_mC and stats files that belongs to Driver.
+static struct attribute *nxp_simtemp_attrs[]=   //Definition of attributes group
 {
-        &dev_attr_sampling_ms.attr,
-        &dev_attr_threshold_mC.attr,
-        &dev_attr_stats.attr,
-        NULL, 
+        //Created for DEVICE_ATTR_RW(sampling_ms), DEVICE_ATTR_RW(threshold_mC) and DEVICE_ATTR_RO(stats).   
+        &dev_attr_sampling_ms.attr,     // Pointer to structure sampling_ms that contains the 'reading (_show)' and 'writing (_store)' functions.
+        &dev_attr_threshold_mC.attr,    // Pointer to structure threshold_mC that contains the 'reading (_show)' and 'writing (_store)' functions.
+        &dev_attr_stats.attr,           // Pointer to structure stats that contains 'only reading (_stats)' function.
+        NULL,                           // Null Pointer to indicate the final of list. (sentinel)
         
 };
 
-//Attrbutes for resgistration in subsystem of devices (devices_create_file)
+//[Kernel] Attrbutes for registration of Control Files in Subsystem Sysfs of Devices for Driver.
 static const struct attribute_group nxp_simtemp_attr_group =
 {
-    .attrs = nxp_simtemp_attrs,
+    .attrs = nxp_simtemp_attrs, //Pointer Array coming from 'static struct attribute'
 
 };
 
@@ -709,7 +738,7 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
         return ret;
     }
 
-    //Syfs Register
+    //---------------Syfs Register--------------------
     ret = sysfs_create_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
 
     if (ret)
@@ -747,7 +776,7 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
         hrtimer_cancel(&nxp_dev->timer); 
 
 
-        //*-------Sysfs Secion */
+        //*-------Sysfs Secion---------- */
         sysfs_remove_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
 
         
