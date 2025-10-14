@@ -111,8 +111,8 @@ struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configurati
     s32                         sampling_ms;    //Period
 
     //Configuration of variables for statistics
-    u32                         alerts_count;   //Variable for diagnostic function as logic counter (stats_show) that indicates how many data crossed a critical treshold
-    u32                         updates_count;  //Variable for diagnostic function as logic counter that indicates how many data was produced
+    u32                         alerts_count;   //Variable for Diagnostic functions as Logic Counter (stats_show) that indicates how many data crossed a critical treshold
+    u32                         updates_count;  //Variable for Diagnostic functions as Logic Counter that indicates how many data was produced.
 
 };
 
@@ -813,7 +813,7 @@ static int __init simtemp_runtime_init(void)
         return ret;
     }
 
-    // 2. Memory allocation for virtual device.
+    // 2. Memory allocation for Virtual Device.
     simtemp_pdev = platform_device_alloc("nxp_simtemp", PLATFORM_DEVID_NONE);
     if (!simtemp_pdev) {
         printk(KERN_ERR "NXP SimTemp: Failed to allocate platform device.\n");
