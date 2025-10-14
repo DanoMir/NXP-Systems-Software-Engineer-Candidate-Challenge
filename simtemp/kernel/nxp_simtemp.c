@@ -331,9 +331,9 @@ static const struct file_operations nxp_simtemp_fops =
 };
 
 //------------------ Platform Device     Functions     -----------------------------------/
-// ----------- Platform Device: Interface Functions -------------
+// ----------- Platform Device: File Interface Functions -------------
 
-//nxp_simtemp_open() [Logic]
+//------nxp_simtemp_open() Function [Logic]-----------
 //'struct inode *inode' (/dev/simtemp) 
 //'struct file *file' are parameters [kernel] for Active Sesion Application-Driver
 //"file" represents the specific instance during the opening
@@ -357,7 +357,8 @@ static int nxp_simtemp_release(struct inode *inode, struct file *file)  //Protot
 return 0;
 }
 
-//---------nxp_simtemp_read() [Logic]--------- Consumer function for access to producer (hrtimer and Ring Buffer) performed in Kernel
+// ----------- Platform Device: File Interface Functions -------------
+//---------nxp_simtemp_read() [Logic] Function--------- Consumer function for access to producer (hrtimer and Ring Buffer) performed in Kernel
 // *buf: Pointer(char*) to Destination Buffer for RAM memory of User Space reserves to receive the sensor.
 //char __user: Critical Qualifier of [kernel] to indicates this pointer (char*) does not belongs to Kernel.
 static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)      //Prototype of function performed when User Space calls to read().
@@ -433,12 +434,12 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
 
 }
 
-
+// ----------- Platform Device: File Interface Functions -------------
 //---------nxp_simtemp_poll() [Logic]--------- Events Mechanism--------
 // Register the process like sleeping until data is ready and reports immediately.
 //struct file *file [kernel]: gives access to Driver State to know what resources to protect and which data to verify.
 //struct poll_table_struct *wait [kernel]: Register Mechanism of Callback that register the sleeping process from User Space in queue (wq)
-static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //Prototype of function performed when User Space calls to poll(), select() or epoll().
+static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //function [Logic] performed when User Space calls to poll(), select() or epoll().
 {
     struct nxp_simtemp_dev *dev = file->private_data; //Saves pointer of Global Structure
     
@@ -479,7 +480,7 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 
 }
 
-//--------------------------  Sysfs Section  -----------------------------------
+//--------------------------  Sysfs Section (LifeCycle Functions) -----------------------------------
 
 //Object Device, arguments used in all syfs functions:
 //struct device *dev: [Kernel] through syfs. Generic Pointer to Platform Device (simtemp) in Device Tree of Kernel  
@@ -521,7 +522,7 @@ static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *at
     //nxp_simtemp_dev *nxp_dev: Specific context of driver, called fot the first time in nxp_simtemp_probe().   
     struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform. 
     
-    unsigned long value;    //Stores temporarily the numeric value of New Sampling Period through susfs       
+    unsigned long value;    //Stores temporarily the numeric value of New Sampling Period through sysfs       
     unsigned long flags;    //Store and Restore the status of the interruptions. 
     int ret;                //Return Variable
 
@@ -640,7 +641,7 @@ static ssize_t stats_show(struct device *dev, struct device_attribute *attr, cha
     return ret; //Returns number of bytes from 'buf'. 
 };
 
-//-----  Syfs Macros  ----
+//----------  Syfs Macros  ---------------
 //Static definitions of attributes of sysfs
 static DEVICE_ATTR_RW(sampling_ms);     //Read/Write attributes for: 'sampling_ms_show' (Read) and 'sampling_ms_store' (Write) through 'dev_attr_sampling_ms' variable
 static DEVICE_ATTR_RW(threshold_mC);    //Read/Write attributes for: 'threshold_mC_show' (Read) and 'threshold_mC_store' (Wtite) through 'dev_attr_threshold_mC' variable.
@@ -656,7 +657,7 @@ static DEVICE_ATTR_RO(stats);           //Read Only attributes for: 'stats_show'
 //Complete map for all sampling_ms, threshold_mC and stats files that belongs to Driver.
 static struct attribute *nxp_simtemp_attrs[]=   //Definition of attributes group
 {
-        //Created for DEVICE_ATTR_RW(sampling_ms), DEVICE_ATTR_RW(threshold_mC) and DEVICE_ATTR_RO(stats).   
+        //Created for Macros DEVICE_ATTR_RW(sampling_ms), DEVICE_ATTR_RW(threshold_mC) and DEVICE_ATTR_RO(stats).   
         &dev_attr_sampling_ms.attr,     // Pointer to structure sampling_ms that contains the 'reading (_show)' and 'writing (_store)' functions.
         &dev_attr_threshold_mC.attr,    // Pointer to structure threshold_mC that contains the 'reading (_show)' and 'writing (_store)' functions.
         &dev_attr_stats.attr,           // Pointer to structure stats that contains 'only reading (_stats)' function.
@@ -664,7 +665,7 @@ static struct attribute *nxp_simtemp_attrs[]=   //Definition of attributes group
         
 };
 
-//[Kernel] Attrbutes for registration of Control Files in Subsystem Sysfs of Devices for Driver.
+//[Kernel] Attrbutes Group for registration of Control Files in Subsystem Sysfs of Devices for Driver.
 static const struct attribute_group nxp_simtemp_attr_group =
 {
     .attrs = nxp_simtemp_attrs, //Pointer Array coming from 'static struct attribute'
@@ -679,10 +680,11 @@ static const struct attribute_group nxp_simtemp_attr_group =
 static int nxp_simtemp_probe(struct platform_device *pdev)
 {
     printk(KERN_INFO "Debug 0 Initializes probe() function\n");
-    struct nxp_simtemp_dev *nxp_dev; 
+    struct nxp_simtemp_dev *nxp_dev;    //Creation of *nxp_dev fot the first time 
     int ret;
 
-    struct device *dev = &pdev->dev; //se sustituye &pdev->dev por dev (Puntero Local)
+    //New Local Pointer *dev
+    struct device *dev = &pdev->dev; // '&pdev->dev' is replaced by 'dev' (Local Pointer)
 
     dev_info(dev,"Debug 1 Start\n");
 
@@ -695,7 +697,9 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
         return -ENOMEM; //Without Memory
     }
     dev_info(dev,"Debug 3 Memoria allocated and valid\n");
-    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer 
+    
+    //Creation of Pointer Persistent *nxp_dev within 'platform_device *pdev'
+    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer used in nxp_simtemp_read(), nxp_simtemp_poll(), simtemp_timer_callback() and sampling_ms_show()    
 
     dev_info(dev,"Debug 4 Driver Data Set\n");
     
