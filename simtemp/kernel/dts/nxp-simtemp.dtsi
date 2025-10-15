@@ -1,0 +1,20 @@
+/ {
+	// Virtual Sensor Node. Se añade bajo la raíz del arbol de dispositivos.
+	simtemp_virtual_sensor: simtemp@0 
+    {
+		
+		// 1. Compatible String (CLAVE para el enlace con el driver)
+		// Compatibility with 'of_match_table' in 'nxp_simtemp.c'
+		compatible = "nxp,simtemp";
+		
+		// Initial Configuration Properties (Reading in probe())
+		// El driver leerá estos valores si no se especifican en el código C.
+		sampling-ms = <100>;       // Sampling Period by Default (100 ms)
+		threshold-mC = <45000>;    // Threshold Alert by default (45.0 °C)
+		
+		// State and Adress Properties
+		
+		reg = <0>;                 // '0' Adress is an placeholder for Virtual Platform Devices.
+		status = "okay";           // Device must be enabled
+	};
+};
