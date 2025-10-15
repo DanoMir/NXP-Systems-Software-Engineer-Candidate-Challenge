@@ -289,7 +289,8 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
 //----------------        File Prototypes--------------------------------
 
 //-----------Platform Driver: ----- Hardware --------------------
-// //--------Structure for Device Tree (Matching)------------------//
+// --------Structure for Device Tree (Matching)------------------//
+//Struct [Kernel] to manage Drivers through matching description in DT with Platform Driver
 static const struct of_device_id nxp_simtemp_dt_match[]=
 {
     {   .compatible = "nxp,simtemp"},
@@ -298,10 +299,10 @@ static const struct of_device_id nxp_simtemp_dt_match[]=
 
 
 //-----------Platform Driver: ----- Driver Starter --------------------
-//Indicates to Platform Driver from kernel How to manipulates this data from Driver
+//Struct [Kernel]Indicates to Platform Driver How to manipulates this data from Driver
 static struct platform_driver nxp_simtemp_driver=
 {
-    .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp, simtemp)
+    .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp,simtemp)
     .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
     .driver             =
     {
@@ -642,11 +643,12 @@ static ssize_t stats_show(struct device *dev, struct device_attribute *attr, cha
 };
 
 //----------  Syfs Macros  ---------------
-//Static definitions of attributes of sysfs
+//Static definitions of attributes of sysfs.
+//Atributes (show) for DEVICE_ATTR_RO and (store) for DEVICE_ATTR_WO are NULL. 
 static DEVICE_ATTR_RW(sampling_ms);     //Read/Write attributes for: 'sampling_ms_show' (Read) and 'sampling_ms_store' (Write) through 'dev_attr_sampling_ms' variable
 static DEVICE_ATTR_RW(threshold_mC);    //Read/Write attributes for: 'threshold_mC_show' (Read) and 'threshold_mC_store' (Wtite) through 'dev_attr_threshold_mC' variable.
 static DEVICE_ATTR_RO(stats);           //Read Only attributes for: 'stats_show' (Read Only) through 'dev_attr_stats' variable
-//Atributes (show) for DEVICE_ATTR_RO and (store) for DEVICE_ATTR_WO are NULL. 
+
 
 //------- Syfs Control List Driver ----------------
 //  .attrs 'struct attribute_group' contains all Control Files of Syfs
@@ -676,13 +678,17 @@ static const struct attribute_group nxp_simtemp_attr_group =
 
 //------------------ Platform Device     Functions     -----------------------------------/
 // ----------- Platform Device: Drive Functions (Lifecycle)----------------------------------------/
+//platform_device [Kernel] is a container for describe ann manage a Device without bus
 
 static int nxp_simtemp_probe(struct platform_device *pdev)
 {
-    printk(KERN_INFO "Debug 0 Initializes probe() function\n");
-    struct nxp_simtemp_dev *nxp_dev;    //Creation of *nxp_dev fot the first time 
+    printk(KERN_INFO "Debug 0 Initializes Driver probe() function\n");
+    //Creation of *nxp_dev for the first time 
+    struct nxp_simtemp_dev *nxp_dev;   //Pointer to Global Structure 
     int ret;
+    u32 value;
 
+    
     //New Local Pointer *dev
     struct device *dev = &pdev->dev; // '&pdev->dev' is replaced by 'dev' (Local Pointer)
 
@@ -703,6 +709,40 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 
     dev_info(dev,"Debug 4 Driver Data Set\n");
     
+    //----------   DT section   ----------------
+    //-------Searching and writing of 'sampling_ms' in DT------
+    ret = of_property_read_u32(pdev->dev.of_node, "sampling-ms", &value);
+
+    if(ret)
+    {
+        dev_warn(&pdev->dev, "Sampling period not set in DT, using default (100ms)\n");
+        nxp_dev->sampling_ms =100;
+
+    }
+
+    else
+    {
+        nxp_dev->sampling_ms = (s32)value;
+
+    }
+
+    //-------Searching and writing of 'threshold_mC' in DT------
+    ret = of_property_read_u32(pdev->dev.of_node, "threshold-mC", &value);
+
+    if(ret)
+    {
+        dev_warn(&pdev->dev, "Threshold not used in DT, using default (4500mC)\n");
+        nxp_dev->threshold_mC = 4500; 
+
+    }
+
+    else
+    {
+
+        nxp_dev->threshold_mC = (s32)value;
+
+    }
+    //--------end of DT configuration
     
     //Initializes primitives for spinlock and wait_queue.
     spin_lock_init(&nxp_dev->lock);     //Initialize spinlock [Kernel Function]
@@ -722,8 +762,8 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 
 
     //Device Tree Configuration (By default)
-    nxp_dev->sampling_ms = 100;
-    nxp_dev->threshold_mC = 45000;
+    //nxp_dev->sampling_ms = 100;
+    //nxp_dev->threshold_mC = 45000;
 
 
     //Register miscdevice (/dev/simtemp).
@@ -762,7 +802,8 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 //----------------Platform Device: Release function (reverse of probe) (Lifecycle)---------------------------
 static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structure from "platform_device.h"
 {
-    struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //[Kernel] structure from "platform_device.h"
+    //Retrieves the Global Struct through pointer from platform device.
+    struct nxp_simtemp_dev *nxp_dev = platform_get_drvdata(pdev); //from "platform_device.h"
 
     //Clean Unload [kernel]: Stops timer and desregister all
     //hrtimer_cancel(&nxp_dev->timer); //[Kernel] Stops the timer if miscdevice fails to prevents an Kernel Panic
@@ -844,7 +885,7 @@ static void __exit simtemp_runtime_exit(void)
     //For Clean Unload. Cleaning in inverse order.
     platform_device_unregister(simtemp_pdev);          //
     platform_driver_unregister(&nxp_simtemp_driver);   //
-    printk(KERN_INFO "NXP SimTemp: Modulo unloades. Bye.\n");
+    printk(KERN_INFO "NXP SimTemp: Module unloaded\n");
 
 }
 
