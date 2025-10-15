@@ -24,7 +24,7 @@
 
 #include <linux/fs.h>               //File operations
 #include <linux/platform_device.h>  //Platform Device
-#include <linux/miscdevice.h>       //Misdevice
+#include <linux/miscdevice.h>       //Misdevice to create 
 #include <linux/spinlock.h>         //Sincronization of spinlock                     
 #include <linux/wait.h>             //Notification of wait queue
 #include <linux/hrtimer.h>          //Timer for simulation
@@ -141,8 +141,6 @@ static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_
 
     
 }
-
-
 
 
 static struct platform_device *simtemp_pdev;
@@ -336,7 +334,7 @@ static const struct file_operations nxp_simtemp_fops =
 
 //------nxp_simtemp_open() Function [Logic]-----------
 //'struct inode *inode' (/dev/simtemp) 
-//'struct file *file' are parameters [kernel] for Active Sesion Application-Driver
+//'struct file *file' are parameters [kernel] for Active Sesion Application-Driver. Equivalent to File Descriptor (fd) from Kernel.
 //"file" represents the specific instance during the opening
 static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function [Logic] performed once when User Space opens the file /dev/simtemp
 {
@@ -364,9 +362,11 @@ return 0;
 //char __user: Critical Qualifier of [kernel] to indicates this pointer (char*) does not belongs to Kernel.
 static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)      //Prototype of function performed when User Space calls to read().
 {
-    //[Logic] Recovers the pointer nxp_dev from open()
+    //[Logic] Retrieves the pointer 'nxp_dev' from Global Structure from open()
     struct nxp_simtemp_dev *dev = file->private_data; //Asigns the memrory direction revovered from (file->private_data) to dev variable
-    struct simtemp_sample sample;       //Sensor sample
+    
+    //Character Device Channel: Access to samples: timestamp_ns, temp_mC and flags.  
+    struct simtemp_sample sample;  //copy the register from Kernel to User Space through Character Device Channel     
     ssize_t retval = 0;                 //    
     unsigned long flags;            //Saves interruptions states.
     
@@ -438,7 +438,7 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
 // ----------- Platform Device: File Interface Functions -------------
 //---------nxp_simtemp_poll() [Logic]--------- Events Mechanism--------
 // Register the process like sleeping until data is ready and reports immediately.
-//struct file *file [kernel]: gives access to Driver State to know what resources to protect and which data to verify.
+//struct file *file [kernel]: gives access to Driver State to know what resources to protect and which data to verify. Equivalent to File Descriptor (fd) from Kernel.
 //struct poll_table_struct *wait [kernel]: Register Mechanism of Callback that register the sleeping process from User Space in queue (wq)
 static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //function [Logic] performed when User Space calls to poll(), select() or epoll().
 {
@@ -766,11 +766,13 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     //nxp_dev->threshold_mC = 45000;
 
 
-    //Register miscdevice (/dev/simtemp).
-    //Register of Character Device
-    nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks Linux for a lower available number
-    nxp_dev->mdev.name = "simtemp"; //File Name in dev/simtemp
-    nxp_dev->mdev.fops = &nxp_simtemp_fops; // Operations Table from nxp_simtemp_fops is assigned to Files System of Linux (/dev/simtemp)
+    //-------Register miscdevice (/dev/simtemp) from 'struct miscdevice'-------
+    //Transfer Channel of Binary Data between Kernel and User Space
+    //Register of Character Device cointauned in 'mdev'
+    nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks to Kernel for a lower available number, maybe 0.
+    nxp_dev->mdev.name = "simtemp";           //File Name in /dev/
+    // Allocate the Function Operation Table 'nxp_simtemp_fops' to Files System of Kernel (/dev/simtemp)
+    nxp_dev->mdev.fops = &nxp_simtemp_fops;   
 
     //Register the Device Driver and /dev/simtemp is created by kernel .
     ret = misc_register(&nxp_dev->mdev); 
@@ -780,6 +782,12 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
         dev_err(dev, "Debug 6. Error registered miscdevice\n");
         //kfree(nxp_dev);//Liberacion manual de memoria
         return ret;
+    }
+    //-------------changes review---------
+    else
+    {
+        dev_err(dev, "Debug 6.1 Device Driver registered successfully\n");
+
     }
 
     //---------------Syfs Register--------------------
@@ -811,31 +819,20 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
     //Memory automatically is liberated by devm_kzalloc
 
     
-
     if(nxp_dev)
     {
-        
-      
-        
         // Producer is stopped (hrtimer initialized in probe function)
         hrtimer_cancel(&nxp_dev->timer); 
 
-
         //*-------Sysfs Secion---------- */
         sysfs_remove_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
-
-        
+  
           // Unregistered Interface: 
         misc_deregister(&nxp_dev->mdev);
 
-        
-
         dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
     }
-    
-    
-    
-
+      
 }
 
 
