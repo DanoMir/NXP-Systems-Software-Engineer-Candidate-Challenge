@@ -1,79 +1,257 @@
-# main.py
-import struct
-import time
 import os
-from datetime import datetime
+import select
+import struct
+import sys
+import time
+import argparse
+from datetime import datetime, timezone 
 
-# Kernel Structure
+# --- Contract Configuration ---
+
+# Data Access Point: Path to file of Character Device created by Driver
+DEVICE_PATH = "/dev/simtemp"
+
+# Configuration access point: Directory where the Control Files are set.
+SYSFS_BASE_PATH = "/sys/devices/platform/nxp_simtemp" 
+
+#Size of Register simtemp_sample (bytes) for os.read()
+SAMPLE_SIZE = 16  
+
+# Unpack Binary Format to correct interpretation from.
+STRUCT_FORMAT = '<Qil' 
+# < - Little Endian
+# Q - u64 timestamp
+# i - s32 temp
+# l - u32 flags
+
+TIMEOUT = 5000
+
 #
+TEMP_DIVISOR = 1000.0
 
-#Defines the exact binary format you expect to receive from Kernel
-#Matching with 'simtemp_sample' struct
-# = ensures the standard data alineation
-# Q u64 timestamp in nanoseconds
-# i s32 temperature in mili-grades.
-# I u32 flags
-SAMPLE_FORMAT = '=QiI'
+# Alert Bit Value for AND operator (&)
+FLAG_THRESHOLD_CROSSED = 0x02 
 
-#Total size for structure (16 bytes) for Character Device.
-SAMPLE_SIZE = struct.calcsize(SAMPLE_FORMAT)
+#
+FLAG_NEW_SAMPLE = 0x01
 
-#Exact path of device node that Driver creates in System
-DEVICE_PATH = '/dev/simtemp'
-TEMP_DIVISOR = 1000.0           #Converts m°C to °C
+# --- Auxiliar Functions Definitions ---
 
-def read_telemetry():
-    print(f"------ NXP SimTemp CLI Reader -----")
-    print(f"Waiting for data on {DEVICE_PATH}. Press Ctrl+C to Stop")
-    
+# Configuration Writing: Control Interface
+# Send configuration comands to Driver Kernel
+# From run_demo.sh
+# attribute: 
+# value: 
+def write_sysfs(attribute, value):
+    """Write one value in sysfs attribute Sysfs. Requires root permissions."""
+    #Construct the path
+    path = os.path.join(SYSFS_BASE_PATH, attribute)
     try:
-        # Opening the interface, calls to nxp_simtemp_open in Driver
-        # Open device in binary mode (rb) binary reading byte to byte
-        with open(DEVICE_PATH, 'rb') as f:
-            while True:   
-                # Reads the exact size of binary sample.
-                # Calls to function nxp_simtemp_read.
-                # Waits and expect 16 bytes
-                # Blocking Reading
-                data = f.read(SAMPLE_SIZE)
-                
-                # Verification.
-                # Confirmes that a complete package of Kernel are received.
-                if len(data) == SAMPLE_SIZE:
-                    #Bynary Data are unpacked
-                    timestamp_ns, temp_mC, flags = struct.unpack(SAMPLE_FORMAT, data)
-                    
-                    #Timestamp is converted to format
-                    #Remember is nanoseconds
-                    timestamp_s = timestamp_ns / 1_000_000_000.0
-                    dt_object = datetime.fromtimestamp(timestamp_s).strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
-                    
-                    #Determines Alerts
-                    alert = "YES" if (flags & 0x02) else "NO"
-                    
-                    #Prints results in format
-                    print(f"{dt_object} temp={temp_mC / TEMP_DIVISOR:.1f}C alert={alert} | Flags: {flags}")
-                 
-                elif len(data) > 0:
-                    print(f"Warning: Received partial data ({len(data)} bytes). Discarding.")
-                    
-    except FileNotFoundError:
-        print(f"ERROR: Device file not found at {DEVICE_PATH}. Is the kernel module loaded?")  
-    except PermissionError:
-        print(f"ERROR: Permission denied. Try running with 'sudo'.")
-    except struct.error as e:
-        print(f"ERROR: Data unpacking failed: {e}. Possible corruption")
-    except KeyboardInterrupt:
-        print("\n Reader stopped by user.")
-        os._exit(0) #Clean output
+        with open(path, 'w') as f:
+            
+            #print(f"Writing in {path}...")
+            #Internal syscall 'write()' to sysfs and 'sampling_ms_store()' and 'threshold_mC_store'
+            f.write(str(value) + '\n')
     except Exception as e:
-        print(f"An unexpected error ocurred: {e}")
+        # if not used 'sudo'
+        # Standard error to shell run_demo.sh 
+        print(f"Error writing in {path}: {e}", file=sys.stderr)
+        #for stop the test sequence and report.
+        sys.exit(1)
+
+
+
+# fd: file descriptor from /dev/simtemp
+# fd---struct file *file---- file->private_data------struct nxp_simtemp_dev
+def read_and_print_sample(fd):
+    """Read and process an Binary Register from kernel."""
+    try:
+        # Call to system syscall 'read()' to fd and size of data from Driver
+        #fd obtained from open()
+        data = os.read(fd, SAMPLE_SIZE) 
         
-if __name__ == "__main__":
-    #Quick Check
-    #Assume that the module is loades before to execute.
+        # Verifies lenght of data
+        if len(data) != SAMPLE_SIZE:
+            return False
+        
+        # Data Validation
+        # Unpacking data
+        timestamp_ns, temp_mC, flags = struct.unpack(STRUCT_FORMAT, data)
+        temp_C = temp_mC / TEMP_DIVISOR
+        timestamp_sec = timestamp_ns / 1_000_000_000.0  
+        
+        # ISO 8601 Time Zone 'Z'
+        date_time = datetime.fromtimestamp(timestamp_sec, tz=timezone.utc).isoformat().replace('+00:00', 'Z')
+
+        #Isolation of Alert Bit from flags
+        alert_status = 1 if (flags & FLAG_THRESHOLD_CROSSED) else 0
+
+        print(f"{date_time} temp={temp_C:.1f}C alert={alert_status} | KERNEL FLAGS: {flags}")
+        return True
+    except Exception:
+        return False
     
+# --- Operation Mode 1 :Continuous Monitoring (Asynchronous Reading) ---
+
+def cli_monitor_mode(args):
+    """Continuous Monitoring using select.poll to wait Kernel Events."""
+    print(f"Starting asynchronous monitoring in {DEVICE_PATH}. Press Ctrl+C to stop.")
+
+    try:
+        # Open with O_NONBLOCK.  Critical for poll to work.
+        # Obtains fd.
+        # os.O_RDONLY: Flag for only read. 
+        # os.O_NONBLOCK: Critical Flag for read() calls. No bloaking when No Data, 
+        # ...in this place must be fail with BlockingIOError instead 
+        fd = os.open(DEVICE_PATH, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        # Standard error to shell run_demo.sh 
+        print(f"Error: File could not be opened {DEVICE_PATH}.", file=sys.stderr)
+        sys.exit(1)
+
+    # Waiting Event
+    # Creation of objects Poll and Epoll.
+    poller = select.poll()
+    # Ask to SO if an Event exist.
+    # select.POLLIN: fd is ready for a normal reading (new sampla available)
+    # select.POLLPRI: fd is ready for a  priority reading (threshold was crossed)
+    poller.register(fd, select.POLLIN | select.POLLPRI) 
+
+    # Main Asynchronous Wait Loop 
+    try:
+        while True:
+            # CPU Waits (sleep) until wake_up_interruptible() from hrtimer_restart 
+            # wait 5000ms. Timeout for security to avoid sleeping forever
+            #events from Wait Queue (wq)
+            events = poller.poll(5000)
+            
+            # If Kernel Wakes-up and wake_up_interruptible() is called.
+            # POLLIN or POLLPRI
+            if events:
+                
+                # --- DEBUG -------------
+                print("-" * 50, file=sys.stderr)
+                print(f"DEBUG: Kernel reports {len(events)} events.", file=sys.stderr)
+                print(f"DEBUG: List of raw events : {events}", file=sys.stderr)
+                print("-" * 50, file=sys.stderr)
+                # ------------------------------
+                
+                # Unpackin 'events' from poll()/epoll(), 'events' contains:
+                # event_fd: Identifies the file (/dev/simtemp) 
+                # mask: Indicates the event (1=DATA, 3=DATA+ALERT), from nxp_simtemp_poll() and returns POLLIN and POLLPRI flags
+                for (event_fd, mask) in events:
+                    #Verifies iof the event is from (/dev/simtemp)
+                    if event_fd == fd:
+                        # Batch Reading
+                        # Reading dates repeatedly through infinite loop
+                        while True:
+                            
+                            try:
+                                #if reads 0bytes through implementation of os.read()
+                                if not read_and_print_sample(fd):
+                                    break 
+                            
+                            # Ring Buffer is empty when os.read(O_NONBLOCK)
+                            # Breaks the loop and returns to sleep in poller.poll()
+                            # -EAGAIN in C (Would Block Error)
+                            except BlockingIOError:
+                                break 
+                            
+                            #unspecified error
+                            except Exception:
+                                break 
+                            #finally implementation
+                            #finally:
+                                #os.close(fd)
+                                #poller.unregistered(fd)
+        #if False: returns to loop                    
+    # When press Ctrl+C        
+    except KeyboardInterrupt:
+        print("\nMonitoring stopped by User.")
+    finally:
+        # Closes the File Descriptor and unregister the poller.
+        os.close(fd)
+        poller.unregister(fd)
+
+
+# --- Operation Mode 2: Threshold Test  ---
+
+def cli_test_mode(args):
+    """Executes a forced test of umbral and reports SUCESSFUL/FAILED."""
+    TEST_THRESHOLD = 4000  # Low Umbral forced (4.0C)
+    TIMEOUT_MS = 500       # 500ms wait
+
+    #fd from (/dev/simtemp) is open in Non Blocking Mode or Read Mode for poll()  
+    try:
+        fd = os.open(DEVICE_PATH, os.O_RDONLY | os.O_NONBLOCK)
+    except OSError:
+        sys.exit(1)
+
+    # 1. Configuration of Sysfs Test
+    print(f"--- STARTING ALERT TEST (Threshold={TEST_THRESHOLD/1000.0}C) ---")
+    write_sysfs("threshold_mC", TEST_THRESHOLD)
+    write_sysfs("sampling_ms", 100) # Asegurar una frecuencia conocida
+
+    # Waiting Event
+    # Creation of objects Poll and Epoll.
+
+    poller = select.poll()
+    # In this case only waiting the Alert Event (POLLPRI) instead only one input
+    poller.register(fd, select.POLLPRI) 
+
+    # Waiting event.
+    # CPU Waits (sleep) until wake_up_interruptible() from hrtimer_restart 
+    # wait 5000ms. Timeout for security to avoid sleeping forever
+    # events from Wait Queue (wq)
+    events = poller.poll(TIMEOUT_MS) 
+
+    if events:
+        for (event_fd, mask) in events:
+            #Conditional if event belongs to fd and if select.POLLPRI flag exist
+            if event_fd == fd and (mask & select.POLLPRI):
+                # Successful: Event is detected
+                print(">> SUCCESSFUL: POLLPRI Event (Threshold Alert) detected.")
+                
+                # Optional: Cleaning the flag in Kernel for the next test.
+                # if os.path.exists(os.path.join(SYSFS_BASE_PATH, "clear_alert")):
+                #    write_sysfs("clear_alert", 1) 
+                
+                # Closes the File Descriptor and unregister the poller.
+                os.close(fd)
+                sys.exit(0) # Successful Code
+    
+    # if no existence of Threshold Alert within TIMEOUT_MS 
+    print(f">> FAIL: Umbral Alert not detected within the time limit.")
+    
+    # Closes the File Descriptor and unregister the poller.
+    os.close(fd)
+    sys.exit(1) # Fail Code
+
+
+# --- Main Entry Point ---
+
+if __name__ == "__main__":
     if not os.path.exists(DEVICE_PATH):
-        print(f"Error: {DEVICED_PATH} does not exists. Please load the module first.")
+        print(f"Error: {DEVICE_PATH} does not exist. Please load the module first.", file=sys.stderr)
+        sys.exit(1)
+
+    parser = argparse.ArgumentParser(description="NXP Virtual Sensor CLI Tool.")
+    parser.add_argument('--sampling-ms', type=int, help='Set sampling period in milliseconds via sysfs.')
+    parser.add_argument('--threshold-mC', type=int, help='Set alert threshold in milli-Celsius via sysfs.')
+    parser.add_argument('--test', action='store_true', help='Run threshold test mode and exit with success/failure code.')
+
+    args = parser.parse_args()
+
+    if args.test:
+        cli_test_mode(args)
     else:
-        read_telemetry()     
+        # Aplicar configuraciones antes de iniciar el monitoreo continuo
+        if args.sampling_ms:
+            write_sysfs("sampling_ms", args.sampling_ms)
+        if args.threshold_mC:
+            write_sysfs("threshold_mC", args.threshold_mC)
+        
+        # Iniciar monitoreo
+        cli_monitor_mode(args)
+        
+                                                         
