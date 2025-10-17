@@ -97,7 +97,7 @@ struct simtemp_ring_buffer  //Structure for Storage [Logic]: Defines the archite
 //------------- Data Structure:  Driver (nxp_simtemp)   ----------------------------------------
 struct nxp_simtemp_dev      //Global Structure [Logic]: Contains the configuration values, functionalities and interfaces of Driver reside
 {    
-    struct miscdevice           mdev;       //Structure of Interface [Kernel]: Miscellaneous Device to register the Character Device
+    struct miscdevice           mdev;       //Structure of Interface [Kernel]: Miscellaneous Device to register the Character Device /dev/simtemp
     wait_queue_head_t           wq;         //Structure of sincronization [Kernel]: Used by "poll" function
     spinlock_t                  lock;       //Structure of concurrency [Kernel]: Protection of storage (shared resources) of interrupts and simultaneous access 
 
@@ -512,11 +512,12 @@ static ssize_t sampling_ms_show(struct device *dev, struct device_attribute *att
     return ret;
 };
 
-//sysfs Section Writing Store Function: sampling_ms_tore [Kernel]: Implemented when the User writes a new time value (milliseconds) to the file: /sys/.../sampling_ms
+//sysfs Section Writing Store Function: sampling_ms_store [Kernel]: Implemented when the User writes a new time value (milliseconds) to the file: /sys/.../sampling_ms
 //Attribute (R/W) 'sampling_ms_store': Pointer .store within 'struct dev_attr_name' is mapped to this function
 //[STORE] Writing of new period of sampling (Restores Stops/Restarts hrtimer)
 //size_t count: Return of [Kernel] with bytes number processed for buf char. if was successful or error code if negative value
-
+//Timer Driver hrtimer is stopped/restarted and period is updated.
+//Actual testing7configuration logic is executed.
 static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
     //Obtains pointer to Global Structure. 
@@ -527,13 +528,16 @@ static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *at
     unsigned long flags;    //Store and Restore the status of the interruptions. 
     int ret;                //Return Variable
 
-    //Converts the input(strings) to numerical value
-    ret = kstrtoul(buf, 10, &value);
+    //Converts the input(strings) to numerical value (binary)
+    ret = kstrtoul(buf, 10, &value);    
+
+    //Validation of input 
     if (ret)
     {
         return ret;
     }
 
+    //Validation of input against insecure values.
     if(value < 10)
     {
         return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
@@ -783,7 +787,7 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
         //kfree(nxp_dev);//Liberacion manual de memoria
         return ret;
     }
-    //-------------changes review---------
+    //-------------changes review---------belowwwwww
     else
     {
         dev_err(dev, "Debug 6.1 Device Driver registered successfully\n");
