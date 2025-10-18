@@ -130,10 +130,10 @@ def cli_monitor_mode(args):
             if events:
                 
                 # --- DEBUG -------------
-                print("-" * 50, file=sys.stderr)
-                print(f"DEBUG: Kernel reports {len(events)} events.", file=sys.stderr)
-                print(f"DEBUG: List of raw events : {events}", file=sys.stderr)
-                print("-" * 50, file=sys.stderr)
+                #print("-" * 50, file=sys.stderr)
+                #print(f"DEBUG: Kernel reports {len(events)} events.", file=sys.stderr)
+                #print(f"DEBUG: List of raw events : {events}", file=sys.stderr)
+                #print("-" * 50, file=sys.stderr)
                 # ------------------------------
                 
                 # Unpackin 'events' from poll()/epoll(), 'events' contains:
