@@ -67,175 +67,81 @@ The objective of this Test Plan is validate the behavior and robustness of Platf
 ====================================================================================================================================================
 | TEST                               | VALIDATION PROCESS                | TEST SUCCESS CRITERIA              | MODULES TESTED                     |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-| Automated Testing.                 |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
+| Automated Testing.                 | Execute run_demo.sh which calls   | The Log returns exit 'code 0'      | nxp_simtemp_poll()                 |
+|                                    | to 'cli_test_mode' this mode      | (SUCCESSFUL), verifying that poll()| wait_queue                         |
+|                                    | configure the threshold to        | woke-up tith POLLPRI flag in time. | cli_test_mode                      |
+|                                    | 4000 mC and wait the alert.       |                                    |                                    |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-|             |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
-|            |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
+| Alert Consumption.                 | Execute run_demo.sh and verify    | The Log must be one line with      | nxp_simtemp_read()                 |
+|                                    | the Log.                          | 'alert =1' and 'KERNEL FLAGS: 3'.  |                                    |
+|                                    |                                   | The ejecution of this process      |                                    |
+|                                    |                                   | must be low latency and high       |                                    |
+|                                    |                                   | velocity.                          |                                    |
+|------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
+
 
 ====================================================================================================================================================
 | TEST CASE: T4 — Error Paths                                                                                                                      |
 ====================================================================================================================================================
 | TEST                               | VALIDATION PROCESS                | TEST SUCCESS CRITERIA              | MODULES TESTED                     |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-| Automated Testing.                 |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
+| Writing and Reading with           | Use 'echo 48000'                  | sudo tee threshold_mC              | sampling_ms_store()                |
+| store/show modules                 |                                   | and then cat threshold_mC          | threshold_mC_show()                |
 |                                    |                                   |                                    |                                    |
 |                                    |                                   |                                    |                                    |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-|             |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
-|            |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
+| stats reading                      | Executes cat /sys/.../stats       | The Log must be show counters for  | stats_show()                       |
+|                                    |                                   | updates and alerts being integers  | spin_lock                          |
+|                                    |                                   | and positives.                     |                                    |
+|                                    |                                   |                                    |                                    |
+|------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
+
 
 ====================================================================================================================================================
 | TEST CASE: T5 — Concurrency                                                                                                                      | 
 ====================================================================================================================================================
 | TEST                               | VALIDATION PROCESS                | TEST SUCCESS CRITERIA              | MODULES TESTED                     |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-| Automated Testing.                 |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
+|  Clean unload.                     | Execute in bash:                  |  Execute in bash:                  | nxp_simtemp_remove()               |
+|                                    | 'sudo insmod nxp_simtemp.ko'      |  'lsmod'                           | misc_deregister                    |
+|                                    | After this execute                |  After this, the module            | sysfs_remove_group()               |
+|                                    | 'sudo insmod nxp_simtemp'         |  nxp_simtemp should not be found   |                                    |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-|             |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
-|            |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
+| Atomicity in hrtimer               | Execute in bash:                  | The Driver must not be fall in     | sampling_ms_store()                |
+|                                    | 'pyhton3 main.py'                 | Kernel Panic or deadlock.          | hrtimer_cancel                     | 
+|                                    | Executes a script that write a    | The monitoring must be continue in | simtemp_timer_callback()           |
+|                                    | new value in 'sampling_ms' 100    | reading until the last rate        | spinlock                           |
+|                                    | times in a fast loop.             | configured.                        |                                    |
+|------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
+|  Multiprocess Access               | Execute in bash:                  | Concurrency un both processes      | nxp_simtemp_read()                 |
+|                                    | 'sudo insmod nxp_simtemp.ko'      | without fails and errors, duplcated| simtemp_buffer_pop()               |
+|                                    | Execute two instances separated   | data and invalid readings that     | spinlock                           |
+|                                    | from the process.                 | could break the atomicity in       |                                    |
+|                                    | python3 monitor.py and            | struct.unpack.                     |                                    |
+|                                    | python3 monitor.py simultaneously |                                    |                                    |
+|------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
+
 
 ====================================================================================================================================================
 | TEST CASE: T6 — API Contract                                                                                                                     |
 ====================================================================================================================================================
 | TEST                               | VALIDATION PROCESS                | TEST SUCCESS CRITERIA              | MODULES TESTED                     |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-| Automated Testing.                 |                                   |                                    |                                    |
+| Binary Consistency                 | Implementation of debugging mode  | The CLO must be read the sample and| nxp_simtemp_read()                 |
+|                                    | to fill the Ring Buffer with      | report the numeric values without  | struct.unpack                      |
+|                                    | 0xFFFFFFFF in every value.        | parsing errors and alingment       |                                    |
 |                                    |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
-|                                    |                                   |                                    |                                    |
+|                                    | Run in bash:                      |                                    |                                    |
+|                                    | 'python 3 main.py'                |                                    |                                    |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
-|             |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
-|            |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|                                    |   |   |   |
-|------------------------------------|---|---|---|
-
-
-
-
-
-T1 Module Load/Unload and Interface
-T1.1 Clean Load
-Executes 'sudo insmod nxp_simtemp.ko'
-Test Success Criteria:
-This comand must be return Code 0 and dmesg from Log should not show any warning.
-Modules Tested:
-    nxp_simtemp_probe()
-        misc_register
-
-T1.2 Existence of Interface /dev/simtemp
-Verify that '/dev/simtep' file has been created
-Test Success Criteria:
-After line execution of 'chmod' in run_demo.sh means that the file exist.
-Modules Tested:
-    misc_register
-
-T1.3 Existence of Interface sysfs
-Verify that sampling_ms, threshold_mC and stats has been created in device directory
-Test Success Criteria:
-Files exists and 'nxp_simtemp' driver can be unloaded cleanly (rmmod withou errors)
-Modules Tested:
-    syfs_create_group()
-    nxp_simtemp_remove()
-
-T2 Data Path (Telemetry Reading)
-
-T2.1 Data Binary Integrity
-Executes the continuous monitoring (python3 main.py)
-Test Success Criteria:
-The CLI application must be read exactly 16 bytes by sample (data packed) and unpack this sample though (<Qil) register without errors.
-Modules Tested:
-    nxp_simtemp_read() - Platform Driver in Kernel Module
-    struct.unpack - CLI in User Space
-
-
-T2.2 Visualization od Dynamic Data
-Observe the data output in real time
-Test Success Criteria:
-The timestamp must be correct according to actual dates of the Operative System and temperature values must be variable.
-Modules Tested
-    simtemp_timer_callback() through: 
-    ktime_get_real_ns
-    get_random_bytes
-
-T2.3 Sampling Rate Stability 
-Configuration of 'sampling_ms' to 500ms (via sysfs)
-Test Success Criteria
-The Log of CLI must be show the samples spaced at intervals of 500 ms showing a stable monitoring.
-Modules Tested
-    hrtimer_forward_now()
-
-T3 Events Validation through Threshold Alert Path
-T3.1 Automated Testing
-Execute run_demo.sh which calls to **cli_test_mode** this mode configure the threshold to 4000 mC and wait the alert.
-Test Success Criteria
-The Log resturns exit code 0 (SUCCESSFUL), verifying that poll() woke-up tith POLLPRI flag in time.
-Modules Tested
-    nxp_simtemp_poll() - Platform Driver in Kernel Module
-    wait_queue - Platform Driver in Kernel Module
-    cli_test_mode - CLI in User Space
-
-T3.2 Alert Consumption
-Execute run_demo.sh and verify the Log.
-Test Success Criteria
-The Log must be one line with 'alert =1' and 'KERNEL FLAGS: 3'. The ejecution of this process must be low latency and high velocity.
-Modules Tested
-    nxp_simtemp_read() - Platform Driver in Kernel Module
-
-
-T4 Config Path and Diagnostics
-T4.1 Writing and Reading with store/show modules
-Use 'echo 48000'
-Test Success Criteria
-sudo tee threshold_mC and then cat threshold_mC
-Modules Tested:
-    sampling_ms_store()
-    threshold_mC_show()
-
-T4.2 stats reading
-Executes cat /sys/.../stats
-Test Success Criteria
-The Log must be show counters for updates and alerts being integers and positives.
-Modules Tested:
-    stats_show()
-    spin_lock
-
-
-
-
+| Short Reading Handling             | Implementing changes in 'main.py' | The Driver returns only the size   | nxp_simtemp_read()                 |
+|                                    | in data = os.read(fd, SAMPLE_SIZE)| requested and log the values in CLI| CLI (I/O handling)                 |
+|                                    | with new values                   | and fail with -EINVAL for          |                                    |
+|                                    | for data = os.read(fd, 8)         | telemetry reading.                 |                                    |
+|------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
+| sysfs Sanity Check                 | After load the driver nxp_simtemp | The Log bash return for all cases: | kstrtoul                           |
+| Invalide Control Reading           | Execute in bash:                  | sudo tee /sys/.../sampling_ms      |                                    |
+|                                    | 'echo "abc"'                      |                                    |                                    |
+|                                    | 'echo -10'                        | and returns -EINVAL                |                                    |
+|                                    | 'echo  5'                         |                                    |                                    |
+|------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
