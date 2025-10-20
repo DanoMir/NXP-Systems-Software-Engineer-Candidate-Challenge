@@ -1,0 +1,12 @@
+# Requirements File for implementation of Python Modules useless. 
+# File: ...\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\user\cli\requirements.txt
+
+# Modules of communication and utilities
+
+argparse
+python-dateutil
+numpy >= 1.25.0
+logging
+
+#Implementing GUI
+#PySide6
