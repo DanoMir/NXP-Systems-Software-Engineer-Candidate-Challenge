@@ -5,21 +5,21 @@ This repository contains the source code for the "Virtual Sensor + Alert Path".
 
 ## About
 # NXP Virtual Sensor Platform Driver (nxp_simtemp)
-This Driver is created and implemented entirely in Linux Kernel Space as an out-of-free platform driver. Its primary funcion is to simulate a temperature sensor, generate samples using a timer and ensuring data integrity.
+This driver is implemented as an **out-of-tree Platform Driver (Kernel Space)** to simulate a sensor, ensure data integrity, and monitor temperature values against a configurable threshold.
 
 ## Project locations & Systems
 
 * Platform Driver (Kernel Space)
-..\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\kernel\nxp_simtemp.c
+..\kernel\nxp_simtemp.c
 
 * CLI app (User Space)
-..\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\user\cli\main.py
+..\user\cli\main.py
 
 * Device Tree Snipset (DT)
-..\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\kernel\dts\nxp-simtemp.dtsi
+..\kernel\dts\nxp-simtemp.dtsi
 
 * Toolchain Automation
-..\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\scripts\build.sh
+..\scripts\build.sh
 
 
 ### Source Control
@@ -34,7 +34,7 @@ Ubuntu LTS 24.04 (64-bit)
 
 -Check Ubuntu Version.
 
-'''Bash
+```bash
     uname -r
 
 if is different to 6.14.0-33-generic
@@ -44,7 +44,7 @@ Please change to Ubuntu version for correct functioning of build.sh
 * Prerequisites in Linux Environment
 
 After having Ubuntu Ubuntu LTS 24.04 (64-bit) 6.14.0-33-generic
-    '''Bash
+    ```bash
     - Base Development Tools
     sudo apt update
     sudo apt install gcc make build-essential
@@ -52,41 +52,48 @@ After having Ubuntu Ubuntu LTS 24.04 (64-bit) 6.14.0-33-generic
     - Kernel Headers
     sudo apt install linux-headers-$(uname -r)
 
+    - Tools installation for lint.sh
+    sudo apt install clang-format -y
+    sudo apt install kernel-manual -y
+    sudo apt install linux-tools-common -y
+
 
 ### Python Version
 Python 3.12.3
 
 -If not Python installed, please install
-'''Bash
+```bash
     sudo apt update
     sudo apt install python3
 
--Preferably make sure that the required version is installed.
-'''Bash
+-Preferably make sure that the required version is installed ALWAYS 3.12 version.
+```bash
     sudo apt update
-    sudo apt install python3 python3-venv
+    sudo apt install python3 python3.12-venv
 
 -ONLY if is required the specific version to run.
 *Navigates to path directory inside the project downloaded form the repository.
-'''Bash
+```bash
     cd ..\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\user\cli
     python3.12 -m venv venv_312
     source venv_312/bin/activate
 
 -ONLY if Linux does not find the specific version.
 *Install pyenv
-'''Bash
+```bash
     curl https://pyenv.run | bash
     (Follow the instructions of installation)
 
 *Install the specific version.
-'''Bash
+```bash
     pyenv local 3.12.3
 
 *Now 'python3' in this directory will use 3.12.3 version
-'''Bash
+```bash
     python3 -m venv venv 
     source venv/bin/activate
+
+
 
 ### Notes on using a Vitual Machine
 
@@ -94,8 +101,8 @@ This project was developed and validated in Virtual Machine Ubuntu 24.04 LTS (x8
 Kernel 6.14.0-33-generic
 
 *Review your version with
-'''Bash
-    sudo $(uname -r)
+```bash
+    sudo (uname -r)
 
 ### Some issues resolved
 * in run_demo.sh
@@ -104,14 +111,14 @@ MODULE_NAME nxp_simtemp
 
 if you have more driver installed please check which was the last module installed with
 
-'''Bash
+```bash
     lsmod
 
 It will display a list of active modules
 
 (example)
 
-'''Bash
+```bash
     Module          Size    Used By 
     nxp_simtemp0    ----    -------
     ...
@@ -130,18 +137,18 @@ Please check the Kernel version 6.14.0-33-generic
 if you have a different version, install the correct Kernel Version.
 
 Review your version with
-'''Bash
+```bash
     sudo $(uname -r)
 
 Kernel Headers Installation with the correct version.
 
-'''Bash
+```bash
     sudo apt update
     sudo apt install linux-headers-6.14.0-33-generic
 
 if the version is not found. Install the recent version.
 
-'''Bash
+```bash
     sudo uname -r
 
 * Lack of User Space dependencies
@@ -150,51 +157,59 @@ The environment could not have the specific libraries in Python
 
     run_demo.py fails with 'ModuleNotFoundError'
 
-'''Bash 
+```bash 
     cd ...\NXP_Systems_Software_Engineer_Candidate_Challenge\simtemp\user\cli
     python3 -m venv venv
 
 Activate the environment:
 
-'''Bash
+```bash
     source venv/bin/activate
 
 Install dependencies:
 
-'''Bash
+```bash
     pip install -r requirements.txt
 
 After using the environment:
 
-'''Bash
+```bash
     deactivate
+
+* EOL format conflict in bash during run .sh files:
+
+When executing either 'bash run_demo.sh' or 'bash build.sh' displays type errors such as:
+
+run_demo.sh: line X: $'\r': command not found (example)
+
+This bash scripts .sh were created in Windows (CRLF) and were transfered to Linux environment.
+
+It is neccesary convert the files .sh to Unix Format (LF)
+
+```bash
+    sudo apt install dos2unix
+    dos2unix scripts/run_demo.sh
+    dos2unix scripts/build.sh
 
 ### Execution and Validation (Core Acceptance Criteria)
 
 3. Execution and Validation (Core Acceptance Criteria)
-The run_demo.sh script automates the full test sequence (Carga, Permisos, Prueba, Descarga).
+The run_demo.sh script automates the full test sequence (Load, Permissions, Test, Unload).
 
 A. Run Automated Threshold Test (--test mode)
-This mode verifies the critical Alert Path (POLLPRI) functionality and reports success or failure.
-
-Bash
-
-cd simtemp/scripts
-chmod +x run_demo.sh
-
-# Execute the full test sequence: insmod -> config -> python --test -> rmmod
-./run_demo.sh 
-Expected Output: --- ÉXITO: La Ruta de Alerta (POLLPRI) funciona correctamente. --- Exit Code: echo $? must return 0.
+This Mode verifies the critical Alert Path (POLLPRI) functionality and report success or failure.
+```bash
+    chmod +x run_demo.sh
+    # Execute the full test sequence: insmod -> config -> python --test -> rmmod
+    ./run_demo.sh 
+    Expected Output: --- ÉXITO: La Ruta de Alerta (POLLPRI) funciona correctamente. --- Exit Code: echo $? must return 0.
 
 B. Run Continuous Monitoring Demo
 To observe live data and dynamic configuration:
-
-Bash
-
-cd simtemp/scripts
-# Execute the full sequence, setting sampling to 500ms
-python3 ../user/cli/main.py --sampling-ms 500
-# Press Ctrl+C to stop, then run sudo rmmod nxp_simtemp to clean up.
+```bash
+    # Execute the full sequence, setting sampling to 500ms
+    python3 ../user/cli/main.py --sampling-ms 500
+    # Press Ctrl+C to stop, then run sudo rmmod nxp_simtemp to clean up.
 
 ### Build Servers
 * Not implemented: 
