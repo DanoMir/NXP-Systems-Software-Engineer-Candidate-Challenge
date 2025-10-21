@@ -193,7 +193,21 @@ It is neccesary convert the files .sh to Unix Format (LF)
 
 ### Execution and Validation (Core Acceptance Criteria)
 
-3. Execution and Validation (Core Acceptance Criteria)
+To validate the complete system (Compilation, Load, Alert Test and Unload) please follow these steps in bash terminal.
+
+Preparation of the environment (Permissions and Navigation)
+
+1. Navigate to the execution directory: The directory scripts/ contains all scripts of automation.
+```bash
+    cd simtemp/scripts
+
+2.- Grant execution permits to the Bash scripts used.
+```bash
+    chmod +x build.sh
+    chmod +x run_demo.sh
+
+
+
 The run_demo.sh script automates the full test sequence (Load, Permissions, Test, Unload).
 
 A. Run Automated Threshold Test (--test mode)
