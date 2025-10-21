@@ -3,17 +3,17 @@
 
 # Modules of Standard Library
 
-os
-select
-sys 
-time
-datetime
+#os
+#select
+#sys 
+#time
+#datetime
 
 # Modules of communication and utilities
 
-argparse
-struct
-timezone
+#argparse
+#struct
+#timezone
 python-dateutil
 numpy >= 1.25.0
 logging
