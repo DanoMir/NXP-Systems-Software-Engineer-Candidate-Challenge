@@ -11,11 +11,16 @@ DEVICE_FILE="/dev/simtemp"
 # Defines the path for sysfs.
 SYSFS_PATH="/sys/bus/platform/devices/simtemp0" 
 
+
+TEST_SAMPLING_RATE=${1:-200} # First Argument or 200 by default
+TEST_THRESHOLD_MC=${2:-45000} # Second Argument or 45000 by default
+
 run_threshold_test() 
 {
     echo "--- 3. Executing CLI Alert Test ---"
     # Python Script in --test execute the test and return 0 or 1
-    python3 ../user/cli/main.py --test
+    #python3 ../user/cli/main.py --test
+    python3 ../user/cli/main.py --sampling-ms "$TEST_SAMPLING_RATE" --threshold-mC "$TEST_THRESHOLD_MC" --test
     
     # Capture the exit code (0 = Successful, 1 = Failed)
     return $?
@@ -43,6 +48,11 @@ if [ -d "$SYSFS_DEVICE_DIR" ]; then
     sudo chmod 666 "$SYSFS_DEVICE_DIR/stats"
     #Permits Granted for User to open and read '/dev/simtemp' 
     sudo chmod 666 "$DEVICE_FILE"
+    #permits for clear_alert
+    sudo chmod 666 "$SYSFS_DEVICE_DIR/clear_alert"
+
+    sudo chmod 666 "$DEVICE_FILE"
+
     echo "--- sysfs Permissions updated.---"
 else
     echo "WARNING: sysfs Directory $SYSFS_DEVICE_DIR Not found. Continue..."
