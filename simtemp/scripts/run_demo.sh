@@ -13,7 +13,7 @@ SYSFS_PATH="/sys/bus/platform/devices/simtemp0"
 
 run_threshold_test() 
 {
-    echo "--- 2.1 Ejecutando Prueba de Alerta CLI ---"
+    echo "--- 3. Executing CLI Alert Test ---"
     # Python Script in --test execute the test and return 0 or 1
     python3 ../user/cli/main.py --test
     
@@ -32,7 +32,7 @@ sleep 1
 #sudo chmod 666 "$SYSFS_PATH/threshold_mC"
 #sudo chmod 666 /dev/simtemp
 #sleep 1
-echo "--- 1.3  Sysfs Permissions  ---"
+echo "--- 2.  Sysfs Permissions  ---"
 # Existence Verification of Directory (to prevent it from failing chmod)
 if [ -d "$SYSFS_DEVICE_DIR" ]; then
     # Within sysfs files:
@@ -43,7 +43,7 @@ if [ -d "$SYSFS_DEVICE_DIR" ]; then
     sudo chmod 666 "$SYSFS_DEVICE_DIR/stats"
     #Permits Granted for User to open and read '/dev/simtemp' 
     sudo chmod 666 "$DEVICE_FILE"
-    echo "sysfs Permissions updated."
+    echo "--- sysfs Permissions updated.---"
 else
     echo "WARNING: sysfs Directory $SYSFS_DEVICE_DIR Not found. Continue..."
 fi
@@ -54,13 +54,13 @@ run_threshold_test
 TEST_RESULT=$? # Saves output code (0 o 1)
 
 if [ $TEST_RESULT -eq 0 ]; then
-    echo "--- SUCCESSFUL: Alert (POLLPRI) works correctly. ---"
+    echo "--- SUCCESS: Alert (POLLPRI) works correctly. ---"
 else
     echo "--- FAILED: Alert (POLLPRI) failed the test. ---"
 fi
 
 # --- Cleaning 1 ---
-echo "--- Unloading Driver Kernel: $MODULE_NAME ---"
+echo "--- 4. Unloading Driver Kernel: $MODULE_NAME ---"
 # rmmod is executed regardless if the test failed or not
 sudo rmmod "$MODULE_NAME" || { echo "WARNING: rmmod failed. Revisa dmesg."; exit 1; }
 
