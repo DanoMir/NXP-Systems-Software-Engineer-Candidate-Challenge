@@ -197,7 +197,7 @@ To validate the complete system (Compilation, Load, Alert Test and Unload) pleas
 
 Preparation of the environment (Permissions and Navigation)
 
-1. Navigate to the execution directory: The directory scripts/ contains all scripts of automation.
+1. Navigate to the execution directory: The directory scripts/ contains all scripts of automation: build.sh and run_demo.sh
 ```bash
     cd simtemp/scripts
 
@@ -206,24 +206,64 @@ Preparation of the environment (Permissions and Navigation)
     chmod +x build.sh
     chmod +x run_demo.sh
 
-
-
 The run_demo.sh script automates the full test sequence (Load, Permissions, Test, Unload).
 
 A. Run Automated Threshold Test (--test mode)
 This Mode verifies the critical Alert Path (POLLPRI) functionality and report success or failure.
+# Execution: The script uses the default successful values (e.g., 100ms, 45000mC)
 ```bash
     chmod +x run_demo.sh
-    # Execute the full test sequence: insmod -> config -> python --test -> rmmod
-    ./run_demo.sh 
-    Expected Output: --- ÉXITO: La Ruta de Alerta (POLLPRI) funciona correctamente. --- Exit Code: echo $? must return 0.
+    # This Execute the full test sequence: insmod -> config -> python --test -> rmmod
+    bash ./run_demo.sh 
+    Expected Log Output:    --- 1. Loading Driver Kernel ---
+                            --- 2.  Sysfs Permissions  ---
+                            --- sysfs Permissions updated.---
+                            --- 3. Executing CLI Alert Test ---
+                            --- STARTING ALERT TEST (Threshold=4.0C) ---
+                            --- SUCCESSFUL: POLLPRI Event (Threshold Alert) detected.
+                            --- SUCCESSFUL: Alert (POLLPRI) works correctly. ---
+                            --- Unloading Driver Kernel: nxp_simtemp ---
+    
+    After this Log, check the Exit Code with:
+    echo $? 
+    must return 0.
 
-B. Run Continuous Monitoring Demo
-To observe live data and dynamic configuration:
+B. Run Automated Threshold Test (--test mode) with initial values.
+This Mode verifies the critical Alert Path (POLLPRI) functionality and report success or failure now with initial values and critical values.
 ```bash
-    # Execute the full sequence, setting sampling to 500ms
-    python3 ../user/cli/main.py --sampling-ms 500
-    # Press Ctrl+C to stop, then run sudo rmmod nxp_simtemp to clean up.
+    chmod +x run_demo.sh
+    # This Execute the full test sequence: insmod -> config -> python --test -> rmmod
+    # First value is sampling_ms and the second value is threshold_mC
+    bash ./run_demo.sh 100 60000
+    Expected Log Output: --- 1. Loading Driver Kernel ---
+                         --- 2.  Sysfs Permissions  ---
+                         --- sysfs Permissions updated.---
+                         --- 3. Executing CLI Alert Test ---
+                         --- STARTING ALERT TEST (Threshold=60.0C) ---
+                         --- FAIL: Umbral Alert not detected within the time limit.
+                         --- FAILED: Alert (POLLPRI) failed the test. ---
+                         --- 4. Unloading Driver Kernel: nxp_simtemp ---
+
+    After this Log, check the Exit Code with:
+    echo $? 
+    must return 1.
+
+C. Run Automated Threshold Test  with values bydefault and to observe dynamic data.
+    ```bash
+        chmod +x run_monitor.sh
+        Expected Log Output: --- 1. Cargando Driver Kernel ---
+                             --- 2.  Sysfs Permissions  ---
+                            --- sysfs Permissions updated.---       
+                            --- 2. Ejecutando Monitoreo CONTINUO (Ctrl+C para Limpieza) ---
+                            Starting asynchronous monitoring in /dev/simtemp. Press Ctrl+C to stop.
+                            2025-10-21T23:11:05.442431Z temp=47.0C alert=1 | KERNEL FLAGS: 3
+                            2025-10-21T23:11:05.542387Z temp=46.5C alert=1 | KERNEL FLAGS: 3
+                            2025-10-21T23:11:05.689062Z temp=41.4C alert=1 | KERNEL FLAGS: 3
+                            2025-10-21T23:11:05.742375Z temp=45.7C alert=1 | KERNEL FLAGS: 3
+                            2025-10-21T23:11:05.847455Z temp=46.0C alert=1 | KERNEL FLAGS: 3
+                            2025-10-21T23:11:05.942896Z temp=47.6C alert=1 | KERNEL FLAGS: 3
+
+        (The user will press Ctrl+C to stop the monitoring, which triggers rmmod.)
 
 ### Build Servers
 * Not implemented: 
