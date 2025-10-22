@@ -210,7 +210,7 @@ def cli_test_mode(args):
             #Conditional if event belongs to fd and if select.POLLPRI flag exist
             if event_fd == fd and (mask & select.POLLPRI):
                 # Successful: Event is detected
-                print(">> SUCCESSFUL: POLLPRI Event (Threshold Alert) detected.")
+                print("--- SUCCESS: POLLPRI Event (Threshold Alert) detected.")
                 
                 # Optional: Cleaning the flag in Kernel for the next test.
                 # if os.path.exists(os.path.join(SYSFS_BASE_PATH, "clear_alert")):
