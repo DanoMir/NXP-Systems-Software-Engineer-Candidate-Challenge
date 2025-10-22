@@ -178,20 +178,28 @@ def cli_monitor_mode(args):
 
 def cli_test_mode(args):
     """Executes a forced test of umbral and reports SUCESSFUL/FAILED."""
-    TEST_THRESHOLD = 4000  # Low Umbral forced (4.0C)
+    #TEST_THRESHOLD = 4000  # Low Umbral forced (4.0C)
     TIMEOUT_MS = 500       # 500ms wait
+    threshold_mC = args.threshold_mC if args.threshold_mC is not None else 45000
+    sampling_ms = args.sampling_ms if args.sampling_ms is not None else 100
 
     #fd from (/dev/simtemp) is open in Non Blocking Mode or Read Mode for poll()  
     try:
         fd = os.open(DEVICE_PATH, os.O_RDONLY | os.O_NONBLOCK)
     except OSError:
         sys.exit(1)
+        
+    write_sysfs("clear_alert", 1)
 
     # 1. Configuration of Sysfs Test
-    print(f"--- STARTING ALERT TEST (Threshold={TEST_THRESHOLD/1000.0}C) ---")
-    write_sysfs("threshold_mC", TEST_THRESHOLD)
-    write_sysfs("sampling_ms", 100) # Asegurar una frecuencia conocida
-
+    #print(f"--- STARTING ALERT TEST (Threshold={TEST_THRESHOLD/1000.0}C) ---")
+    print(f"--- STARTING ALERT TEST (Threshold={threshold_mC/1000.0}C) ---")
+    #write_sysfs("threshold_mC", TEST_THRESHOLD)
+    #write_sysfs("sampling_ms", 100) # Asegurar una frecuencia conocida
+    
+    write_sysfs("threshold_mC", threshold_mC)
+    write_sysfs("sampling_ms", sampling_ms)
+    
     # Waiting Event
     # Creation of objects Poll and Epoll.
 
@@ -209,20 +217,28 @@ def cli_test_mode(args):
         for (event_fd, mask) in events:
             #Conditional if event belongs to fd and if select.POLLPRI flag exist
             if event_fd == fd and (mask & select.POLLPRI):
+                
+                read_and_print_sample(fd)
+                
+                #Clean the state so as not affect the next test
+                write_sysfs("clear_alert", 1)
+                
                 # Successful: Event is detected
                 print("--- SUCCESS: POLLPRI Event (Threshold Alert) detected.")
                 
                 # Optional: Cleaning the flag in Kernel for the next test.
-                # if os.path.exists(os.path.join(SYSFS_BASE_PATH, "clear_alert")):
-                #    write_sysfs("clear_alert", 1) 
+                if os.path.exists(os.path.join(SYSFS_BASE_PATH, "clear_alert")):
+                    write_sysfs("clear_alert", 1) 
                 
                 # Closes the File Descriptor and unregister the poller.
                 os.close(fd)
                 sys.exit(0) # Successful Code
     
     # if no existence of Threshold Alert within TIMEOUT_MS 
-    print(f">> FAIL: Umbral Alert not detected within the time limit.")
+    print(f"--- FAIL: Umbral Alert not detected within the time limit.")
     
+    #Clean the state so as not affect the next test
+    write_sysfs("clear_alert", 1)
     # Closes the File Descriptor and unregister the poller.
     os.close(fd)
     sys.exit(1) # Fail Code
