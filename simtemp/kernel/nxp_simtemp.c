@@ -8,7 +8,7 @@
 *
 * Responsible  : Daniel R Miranda [danielrmirandacortes@gmail.com]
 *
-* Guidelines   : 
+* Guidelines   : Linux Kernel Coding Style
 *
 *
 * 
@@ -18,27 +18,25 @@
 * * * * * * * * * * * Header Files *   *   *   *   *   *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/init.h>
-
-#include <linux/fs.h>               //File operations
-#include <linux/platform_device.h>  //Platform Device
-#include <linux/miscdevice.h>       //Misdevice to create 
-#include <linux/spinlock.h>         //Sincronization of spinlock                     
-#include <linux/wait.h>             //Notification of wait queue
-#include <linux/hrtimer.h>          //Timer for simulation
-#include <linux/slab.h>             //kzalloc/kfree    
-#include <linux/uaccess.h>          //Copy to user 
-
+#include <linux/module.h>           //Definitions, macros and structures for LKM (Loadable Kernel Module)
+#include <linux/kernel.h>           //Macros and basic functions for interact with the Kernel
+#include <linux/init.h>             //Macros for (LKMs) Linux Kernel Modules in its LifeCycle (Startup/Exit)
+#include <linux/fs.h>               //File Operator for VFS Virtual File System
+#include <linux/platform_device.h>  //Driver Platform Development: Structs for device and driver, state data and register of driver
+#include <linux/miscdevice.h>       //Miscellaneous Character Devices in /dev/simtemp interface.
+#include <linux/spinlock.h>         //Implementation, control and sincronization of spinlock in concurrency.                    
+#include <linux/wait.h>             //Notification of wait queue: blocking, sleeping and wake-up
+#include <linux/hrtimer.h>          //Timer for simulation of High Resolution
+#include <linux/slab.h>             //Slab Allocator Functions and macros kzalloc/kfree    
+#include <linux/uaccess.h>          //User Access. Functions and macros to transfer data between Kernel and User
 #include <linux/time.h>             //Timer for simulation
 #include <linux/of.h>               //Device Tree    
-
-#include <linux/mod_devicetable.h>
-#include <linux/device.h>
-#include <linux/poll.h>
-#include <linux/random.h>
-#include <linux/time.h>
+#include <linux/types.h>            //Defines Standar Data Types and Size for portabilitu between different architectures.    
+#include <linux/mod_devicetable.h>  //Match Tables Compatibility with devices  
+#include <linux/device.h>           //Generic Struct and Auxiliary Functions for Devices Subsystem amd Sysfs
+#include <linux/poll.h>             //Polling interface for handling of I/O based in events.
+#include <linux/random.h>           //Generation of random numbers RNG
+#include <linux/time.h>             //Time measurement and timestamps
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Daniel Miranda");
@@ -46,14 +44,10 @@ MODULE_DESCRIPTION("NXP SimpTemp");
 MODULE_VERSION("1.0");
 
 #define RING_BUFFER_SIZE    32          //Size of buffer
-#define SAMPLE_AVAILABLE    (1<<0)
-#define TRESHOLD_CROSSED    (1<<1)
+#define SAMPLE_AVAILABLE    (1<<0)      //Bit 0 for __u32 flags in struct simtemp_sample
+#define TRESHOLD_CROSSED    (1<<1)      //Bit 1 for __u32 flags in struct simtemp_sample
 
 
-
-
-
-//static struct platform_device *simtemp_pdev;
 
 //--------------------------Data Structure---------------------------------------
 //----------------- Data Structure: Transferred Data  --------------------//
@@ -112,9 +106,6 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
 static void nxp_simtemp_remove(struct platform_device *pdev);                                       //Function Prototype [Kernel] structure from "platform_device.h"
 static int nxp_simtemp_probe(struct platform_device *pdev);  
 
-// enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer);
-// static void simtemp_timer_setup(struct nxp_simtemp_dev *dev); //Este prototipo se declaro despues de la declaracion de la estructura.
-
 // -----Function Prototypes: Sysfs Control Interface Functions: Control Panel of Driver, interaction with configuration and diagnosis. 
 //--- Reading Functions: -show  ---
 static ssize_t sampling_ms_show(struct device *dev, struct device_attribute *attr, char *buf);
@@ -128,8 +119,6 @@ static ssize_t clear_alert_store(struct device *dev, struct device_attribute *at
 // -----Function Prototypes: Module Lifecycle Functions: Entry and exit points for load and unload of Driver.
 static int __init simtemp_runtime_init(void);
 static void __exit simtemp_runtime_exit(void);
-
-
 
 // ----- Function Prototypes: Producer Control (Timer and Event Logic): Init, Mantain and operate the sampling ------------------
 enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer);
@@ -190,14 +179,6 @@ static const struct file_operations nxp_simtemp_fops =
 
 };
 
-//--------------------------------------- fin prueba ------------------------------------
-
-
-
-
-
-
-
 
 
 //---------------Timer Callback (Data Generator) Producer------------------------------------------
@@ -226,17 +207,6 @@ static void simtemp_timer_setup(struct nxp_simtemp_dev *dev) // For nxp_simtemp_
 }
 
 
-//static struct platform_device *simtemp_pdev;
-
-//extern struct platform_driver nxp_simtemp_driver;
-
-//------------END DEBUG------------------
-
-// //----------------------Logic Prototypes fo Functions [Logic]------------------
-// static bool simtemp_buffer_is_empty(struct nxp_simtemp_dev *dev);
-// static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtemp_sample *sample);
-// static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sample *sample);
-// static void simtemp_buffer_init(struct simtemp_ring_buffer *rb);
 
 //---Ring Buffer Logic Initialization-----------------
 static void simtemp_buffer_init(struct simtemp_ring_buffer *rb)
@@ -252,7 +222,6 @@ static void simtemp_buffer_init(struct simtemp_ring_buffer *rb)
 
     //Maybe memset to clean buffer.
 }
-
 
 
 // ---------------------- (SimTemp Functions)  ---------------------------------------
@@ -365,52 +334,7 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
     return HRTIMER_RESTART; //Data required by 'hrtimer' API [kernel] to timer comes back 
 }
 
-// // --------------------    Platform Driver     ------------------------------------
-// // ------------      Final register of Driver------------------------//
-// //----------------        File Prototypes--------------------------------
 
-// //-----------Platform Driver: ----- Hardware --------------------
-// // --------Structure for Device Tree (Matching)------------------//
-// //Struct [Kernel] to manage Drivers through matching description in DT with Platform Driver
-// static const struct of_device_id nxp_simtemp_dt_match[]=
-// {
-//     {   .compatible = "nxp,simtemp"},
-//     {   /*Sentinel*/}                   //Sentinel stops the search
-// };
-
-
-// //-----------Platform Driver: ----- Driver Starter --------------------
-// //Struct [Kernel]Indicates to Platform Driver How to manipulates this data from Driver
-// static struct platform_driver nxp_simtemp_driver=
-// {
-//     .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp,simtemp)
-//     .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
-//     .driver             =
-//     {
-//         .name           = "nxp_simtemp",            //Name of driver for file system of Kernel
-//         .owner          = THIS_MODULE,              //Indicates to Kernel that the set of functions belongs to actual module (user module)
-//         .of_match_table = nxp_simtemp_dt_match,     //Search in the Device Tree devices with the string (nxp, simtemp) if it is found, "probe" is activated
-//     },
-// };
-
-// // //---------File Operations Table: Functions for Driver Map-----------------
-
-// //----------------------- Files Prototypes------------------------------
-// //------Platform Driver: Interface Contract API .   nxp_simtemp_fops     --------------------------------------------------------------------
-// //Pointers table to functions
-// // "struct file_operations" [kernel]: Data Type provides by kernel. Contains all the pointers to the function that the driver performed to interact with files system of Linux (Kernel)
-// // "file_operations"[kernel]: Standard Template definied by Linux for Character Devices (/dev)
-// // "nxp_simtemp_fops" [logic]: Variable provides by implemented logic only visible inside this file (static). 
-// static const struct file_operations nxp_simtemp_fops =
-// {
-
-//     .owner      =THIS_MODULE,           //Indicates to Kernel that the set of functions belongs to actual module (user module)
-//     .open       =nxp_simtemp_open,      //Pointer to the function performed when User Space calls to open("/dev/simtemp", ...)
-//     .release    =nxp_simtemp_release,   //Pointer to the function performed when User Space calls to close(fd). 
-//     .read       =nxp_simtemp_read,      //Pointer to the function performed when User Space calls to read(fd, ...)
-//     .poll       =nxp_simtemp_poll,      //Pointer to the function performed when User Space calls to poll() or epoll().
-
-// };
 
 //------------------ Platform Device     Functions     -----------------------------------/
 // ----------- Platform Device: File Interface Functions -------------
