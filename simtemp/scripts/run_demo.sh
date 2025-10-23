@@ -89,5 +89,5 @@ sleep 3
 echo "--- 3. Unloading Driver Kernel: $MODULE_NAME ---"
 sudo rmmod "$MODULE_NAME" || { echo "WARNING: rmmod failed."; exit 1; }
 sleep 4
-echo "End of Driver Implementation "
+echo "--- End of Driver Implementation --- "
 #Stops with Ctrl+C
