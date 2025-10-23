@@ -1,3 +1,8 @@
+# NXP-Systems-Software-Engineer-Candidate-Challenge
+# Welcome to NXP Systems Software Engineer Candidate Challenge!
+
+# TESTPLAN.md
+
 1. Objectives and scopes
 The objective of this Test Plan is validate the behavior and robustness of Platform Driver Module 'nxp_simtemp' and its User Space Interface (CLI). The scope covers three communication routes: Data Control and Asyncronous Events.
 
