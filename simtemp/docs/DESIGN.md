@@ -1,6 +1,8 @@
 # NXP-Systems-Software-Engineer-Candidate-Challenge
 # Welcome to NXP Systems Software Engineer Candidate Challenge!
 
+# DESIGN.md
+
 ## About
 This document details the System design and architectural justification for the NXP Virtual Sensor Platform Driver. The primary goal was to create a robust, low-latency telemetry and control system. The Platform Driver (Kernel Space) simulates a sensor thet generates Dynamic Temperature Samples periodically via an hrtimer, which are consumed by a User Space CLI. The architecture is validated to ensure safe asynchronous communication and low CPU consumption via the implement notification mechanism.
 
@@ -43,7 +45,7 @@ The project utilizes a robust two-testing methodology to validate functionality 
 
 * 6.2. Continuous Monitoring Test ( run_monitor.sh): This mode provides live evidence of data stability. The resulting log confirms that samples are continuous, dynamic (non-repetitive), and mantain the precise configured sampling rate (e.g. 200 ms). This validates the efficiency of the hrtimer and the stable operation of the Ring Buffer in a real time environment.
 
-(check the video_demo from the shared folder).
+(check the demo_video_NXP_Virtual_Sensor_Platform_Driver.mp4 from the shared folder).
 
 
 ### 6. Escalability
@@ -58,6 +60,7 @@ The use of the Platform Driver model and the Device Tree simplifies portability.
 Following a rigorous development and validation process , the Platform Driver module for the NXP Challenge is complete, fully operative and compliant with the engineering system requirements. The solution implements a robust system of Telemetry and Asinchronous Control, using the hrtimer of Kernel to production of Data and spinlocks to ensure atomic mutual exclusion of the Ring Buffer effectively preventing race conditions in multi-core environments. The Kernel-User Space interface is efficient and secure, leveraging poll/epoll for low lattency asynchronous event synchronization and sysfs for Dynamic configuration and diagnosis. The automated test confirms the sucess of the Alert Path (POLLPRI) and the overall robustness of Life Cycle of Kernel, demonstrating a solid domain of software development for embebdded systems in Linux environment. 
 
 ### 8. Future Work & Design Vision
+
 Given a larger time constraint, the priority would be to migrate the control interface management from a simple filesystem-based system to an atomic API. This would be achieved by implementing the ioctl syscall for batch configuration, allowing User Space applications to update both the sampling_ms and threshold_mC safely and atomically in a single call, eliminating the need for sequential sysfs writes and guaranteeing configuration integrity. Additionally, to enhance robustness and reduce technical debt, the bidirectional sysfs path would be completed by implementing the _show handlers, enabling users to read and validate the driver's current configuration state from User Space, which is vital for effective diagnostics and tracing.
 
 As for performance, code cleanliness, and software quality, three key architectural improvements would be addressed. First, the driver's initial configuration would be moved from hardcoded values in the probe function to configuration read directly from the Device Tree (DT), which is the standard of Linux. Second, a comprehensive unit testing suite for the User Space application (app.py CLI/GUI) would be implemented using frameworks like pytest. These tests would focus on verifying the logic of struct.unpack, the correct interpretation of the POLLPRI flag, and the test Exit Codes, ensuring User Space reliability independent of the driver's presence. Finally, further optimization would involve exploring the use of a Workqueue to decouple the processing and notification of the Ring Buffer from the critical hrtimer context, minimizing execution time within the interrupt handler.
