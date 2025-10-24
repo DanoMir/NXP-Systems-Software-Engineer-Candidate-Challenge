@@ -351,20 +351,20 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
       //Critical section starts that uses a temporal spinlock to access to shared variable 'alerts_count'
     //Verificates alert events (Threshold)
     
-    spin_lock_irqsave(&dev->lock, flags);
+    //spin_lock_irqsave(&dev->lock, flags);
 
     //Check reading status (Disponible data)
     if(!simtemp_buffer_is_empty(dev))
     {
 	//mask to python
-	mask |= (POLLPRI | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
+	mask |= (EPOLLIN | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
     }
 
-  
+    spin_lock_irqsave(&dev->lock, flags);
 
     if(dev->alerts_count >0)	    //Global Variable
     {
-	mask |= POLLPRI; //PollPriority: Event in high priotity
+	mask |= EPOLLPRI; //PollPriority: Event in high priotity
     }
     
     spin_unlock_irqrestore(&dev->lock, flags);
