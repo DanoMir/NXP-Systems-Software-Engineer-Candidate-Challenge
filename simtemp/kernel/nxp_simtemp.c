@@ -1,7 +1,7 @@
 /***************************************************************************
-        Open Source License 2025 NXP Semiconductor Challenge Stage
+	Open Source License 2025 NXP Semiconductor Challenge Stage
 ****************************************************************************
-* Title        : nxp_simptemp.c
+* Title	       : nxp_simptemp.c
 * Description  : Source File of simtemp
 *
 * Environment  : C Language
@@ -15,22 +15,22 @@
 *
 ***************************************************************************
 * * * * * * * * * * * * * * * * * * * * * * * * * * * *
-* * * * * * * * * * * Header File *   *   *   *   *   *
+* * * * * * * * * * * Header File *   *	  *   *	  *   *
 * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
 #include "nxp_simtemp.h"
 
 
-// //--------------------    Platform Driver     ------------------------------------
-// // ------------      Final register of Driver------------------------//
-// //----------------        File Prototypes--------------------------------
+// //--------------------    Platform Driver	 ------------------------------------
+// // ------------	Final register of Driver------------------------//
+// //----------------	     File Prototypes--------------------------------
 
 //-----------Platform Driver: ----- Hardware --------------------
 // --------Structure for Device Tree (Matching)------------------//
 //Struct [Kernel] to manage Drivers through matching description in DT with Platform Driver
 static const struct of_device_id nxp_simtemp_dt_match[]=
 {
-    {   .compatible = "nxp,simtemp"},
-    {   /*Sentinel*/}                   //Sentinel stops the search
+    {	.compatible = "nxp,simtemp"},
+    {	/*Sentinel*/}			//Sentinel stops the search
 };
 
 
@@ -38,20 +38,20 @@ static const struct of_device_id nxp_simtemp_dt_match[]=
 //Struct [Kernel]Indicates to Platform Driver How to manipulates this data from Driver
 static struct platform_driver nxp_simtemp_driver=
 {
-    .probe              = nxp_simtemp_probe,        //Pointer to function that is performed by kernel when it finds a compatible device (nxp,simtemp)
-    .remove             = nxp_simtemp_remove,       //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
-    .driver             =
+    .probe		= nxp_simtemp_probe,	    //Pointer to function that is performed by kernel when it finds a compatible device (nxp,simtemp)
+    .remove		= nxp_simtemp_remove,	    //Pointer to function that is performed by kernel when the module is unloaded (rmmod)
+    .driver		=
     {
-        .name           = "nxp_simtemp",            //Name of driver for file system of Kernel
-        .owner          = THIS_MODULE,              //Indicates to Kernel that the set of functions belongs to actual module (user module)
-        .of_match_table = nxp_simtemp_dt_match,     //Search in the Device Tree devices with the string (nxp, simtemp) if it is found, "probe" is activated
+	.name		= "nxp_simtemp",	    //Name of driver for file system of Kernel
+	.owner		= THIS_MODULE,		    //Indicates to Kernel that the set of functions belongs to actual module (user module)
+	.of_match_table = nxp_simtemp_dt_match,	    //Search in the Device Tree devices with the string (nxp, simtemp) if it is found, "probe" is activated
     },
 };
 
 // // //---------File Operations Table: Functions for Driver Map-----------------
 
 //----------------------- Files Prototypes------------------------------
-//------Platform Driver: Interface Contract API .   nxp_simtemp_fops     --------------------------------------------------------------------
+//------Platform Driver: Interface Contract API .   nxp_simtemp_fops	 --------------------------------------------------------------------
 //Pointers table to functions
 // "struct file_operations" [kernel]: Data Type provides by kernel. Contains all the pointers to the function that the driver performed to interact with files system of Linux (Kernel)
 // "file_operations"[kernel]: Standard Template definied by Linux for Character Devices (/dev)
@@ -59,11 +59,11 @@ static struct platform_driver nxp_simtemp_driver=
 static const struct file_operations nxp_simtemp_fops =
 {
 
-    .owner      =THIS_MODULE,           //Indicates to Kernel that the set of functions belongs to actual module (user module)
-    .open       =nxp_simtemp_open,      //Pointer to the function performed when User Space calls to open("/dev/simtemp", ...)
-    .release    =nxp_simtemp_release,   //Pointer to the function performed when User Space calls to close(fd). 
-    .read       =nxp_simtemp_read,      //Pointer to the function performed when User Space calls to read(fd, ...)
-    .poll       =nxp_simtemp_poll,      //Pointer to the function performed when User Space calls to poll() or epoll().
+    .owner	=THIS_MODULE,		//Indicates to Kernel that the set of functions belongs to actual module (user module)
+    .open	=nxp_simtemp_open,	//Pointer to the function performed when User Space calls to open("/dev/simtemp", ...)
+    .release	=nxp_simtemp_release,	//Pointer to the function performed when User Space calls to close(fd). 
+    .read	=nxp_simtemp_read,	//Pointer to the function performed when User Space calls to read(fd, ...)
+    .poll	=nxp_simtemp_poll,	//Pointer to the function performed when User Space calls to poll() or epoll().
 
 };
 
@@ -130,17 +130,17 @@ static void simtemp_buffer_push(struct nxp_simtemp_dev *dev, const struct simtem
     //Algorithm of Overwrite Logic, If buffer is full, 
     if(dev->rb.count == RING_BUFFER_SIZE) //Overwrite
     {
-        dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
-        dev->rb.count--;
-        printk(KERN_WARNING "NXP SimTemp: Buffer overflow, discarded sample.\n");
+	dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;
+	dev->rb.count--;
+	printk(KERN_WARNING "NXP SimTemp: Buffer overflow, discarded sample.\n");
 
 
     }
     //After overwriting, new data is writed and Tail and Head is updated.
     //Algorithm of sample writing through module (Wrap Around)
-    dev->rb.buffer[dev->rb.head] = *sample;                 //sample value is copied to buffer array in actual position of writing pointer.
+    dev->rb.buffer[dev->rb.head] = *sample;		    //sample value is copied to buffer array in actual position of writing pointer.
     dev->rb.head = (dev->rb.head + 1) % RING_BUFFER_SIZE;   //if head reaches to end of Ring Buffer, module makes the pointer returns to 0 index.
-    dev->rb.count++;                                        //counter is incremented
+    dev->rb.count++;					    //counter is incremented
 }
 
 //Logic Prototypes (SimTemp Function-Pop): Read and remove the oldest sample (Called by read() function)
@@ -151,16 +151,16 @@ static bool simtemp_buffer_pop(struct nxp_simtemp_dev *dev, struct simtemp_sampl
     //Verifies if Buffer have data, if empty returns false.
     if(simtemp_buffer_is_empty(dev))
     {
-        return false; //If nothing to read
-        //Blocks the process through wait_event_interruptible process
+	return false; //If nothing to read
+	//Blocks the process through wait_event_interruptible process
     }
 
     //Copy the data and the queue moves forward
-    *sample = dev->rb.buffer[dev->rb.tail];     
+    *sample = dev->rb.buffer[dev->rb.tail];
     
     //If Tail reaches the end of the array, returns to 0 index
     dev->rb.tail = (dev->rb.tail + 1) % RING_BUFFER_SIZE;   //Moves Tail one position forward through "wrap-around" with module(%)
-    dev->rb.count--;                                        //Decreases the counter to indicate that sample buffer has been consumed.
+    dev->rb.count--;					    //Decreases the counter to indicate that sample buffer has been consumed.
 
     return true; //If reading was successful
 }
@@ -173,8 +173,8 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
 {
     // Obtains the memory address of 'nxp_simtemp_dev' through 'struct hrtimer *timer'
     struct nxp_simtemp_dev *dev = container_of(timer, struct nxp_simtemp_dev, timer); //Macro [kernel] to navigates in memory, obtains the memory address
-    struct simtemp_sample   sample;     // access to timestamp_ns, temp_mC and flags
-    unsigned long flags;                // variable flag
+    struct simtemp_sample   sample;	// access to timestamp_ns, temp_mC and flags
+    unsigned long flags;		// variable flag
     s32 current_temp;
     u32 random_offset;
 
@@ -183,9 +183,9 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
     get_random_bytes(&random_offset, sizeof(random_offset));
     current_temp = 45000 + (random_offset % 10000 ) - 5000;
 
-    sample.timestamp_ns = ktime_get_real_ns();       //Generates a timestamp in nanoseconds
+    sample.timestamp_ns = ktime_get_real_ns();	     //Generates a timestamp in nanoseconds
     sample.temp_mC = current_temp;   //jiffies is a [kernel] counter 
-    sample.flags = SAMPLE_AVAILABLE;            //Sets bit 0 to indicate a sample available for Consumer (read()).          
+    sample.flags = SAMPLE_AVAILABLE;		//Sets bit 0 to indicate a sample available for Consumer (read()).	    
 
     //---Start critical section--
     //Ensuring atomicity (critical)
@@ -193,17 +193,17 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
 
     if(current_temp > dev->threshold_mC)
     {
-        sample.flags |= TRESHOLD_CROSSED;
-        dev->alerts_count++;
+	sample.flags |= TRESHOLD_CROSSED;
+	dev->alerts_count++;
 
     }
 
 
 
     //Data Writing [Logic]. Writes the sample in Ring Buffer through overwritting
-    simtemp_buffer_push(dev, &sample);  //If buffer is full moving the tail if necessary
+    simtemp_buffer_push(dev, &sample);	//If buffer is full moving the tail if necessary
 
-     dev->updates_count++;       //Counter for Diagnostic Function
+     dev->updates_count++;	 //Counter for Diagnostic Function
 
     //Liberates 'spin_unlock()' adquired by 'simtemp_call_back()' or 'read()' rutines.
     spin_unlock_irqrestore(&dev->lock, flags); //Restores the interruptions states.
@@ -224,14 +224,14 @@ enum hrtimer_restart simtemp_timer_callback(struct hrtimer *timer) //[kernel]
 
 
 
-//------------------ Platform Device     Functions     -----------------------------------/
+//------------------ Platform Device	 Functions     -----------------------------------/
 // ----------- Platform Device: File Interface Functions -------------
 
 //------nxp_simtemp_open() Function [Logic]-----------
 //'struct inode *inode' (/dev/simtemp) 
 //'struct file *file' are parameters [kernel] for Active Sesion Application-Driver. Equivalent to File Descriptor (fd) from Kernel.
 //"file" represents the specific instance during the opening
-static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Function [Logic] performed once when User Space opens the file /dev/simtemp
+static int nxp_simtemp_open(struct inode *inode, struct file *file)	    //Function [Logic] performed once when User Space opens the file /dev/simtemp
 {
     //Recover the pointer to Global State struct(nxp_simtemp_dev). Useful for the following functions.
     //'container_of' [kernel] obtains the pointer (file->private_data) from 'nxp_simtemp_dev' through 'mdev'
@@ -243,7 +243,7 @@ static int nxp_simtemp_open(struct inode *inode, struct file *file)         //Fu
     return 0;
 }
 
-static int nxp_simtemp_release(struct inode *inode, struct file *file)  //Prototype of function performed when user space calls to close() or when the process end.
+static int nxp_simtemp_release(struct inode *inode, struct file *file)	//Prototype of function performed when user space calls to close() or when the process end.
 {
 
 //Here memory is liberated if specific memory was assignated for this aperture process.
@@ -262,27 +262,27 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
     
     //Character Device Channel: Access to samples: timestamp_ns, temp_mC and flags.  
     struct simtemp_sample sample;  //copy the register from Kernel to User Space through Character Device Channel     
-    ssize_t retval = 0;                 //    
-    unsigned long flags;            //Saves interruptions states. Store and Restore the status of the interruptions.
+    ssize_t retval = 0;			//    
+    unsigned long flags;	    //Saves interruptions states. Store and Restore the status of the interruptions.
     
     //Ring Buffer [Logic] must be large enough
     if (count < sizeof(sample))
     {
-        return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
+	return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
     }
 
 
     while (simtemp_buffer_is_empty(dev))
     {
-        if(file->f_flags & O_NONBLOCK)
-        {
-            return -EAGAIN; 
-        }
+	if(file->f_flags & O_NONBLOCK)
+	{
+	    return -EAGAIN; 
+	}
 
-        if (wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
-        {
-            return -ERESTARTSYS;
-        }
+	if (wait_event_interruptible(dev->wq, !simtemp_buffer_is_empty(dev)))
+	{
+	    return -ERESTARTSYS;
+	}
     }
 
     //Atomic extraction. SpinLock is acquired
@@ -295,33 +295,33 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
     //Calls to Ring Buffer [Logic] to extract the oldest data.
     if (simtemp_buffer_pop(dev, &sample))
     {
-        retval = sizeof(sample);    //Variable adquires the exact data of sample.
+	retval = sizeof(sample);    //Variable adquires the exact data of sample.
 
-           if ((sample.flags & TRESHOLD_CROSSED) && dev->alerts_count > 0) {
-                dev->alerts_count--;
-        }
+	   if ((sample.flags & TRESHOLD_CROSSED) && dev->alerts_count > 0) {
+		dev->alerts_count--;
+	}
     }
     else
     {
-        
-        retval = -EAGAIN; //Error -11 Try Again. [Kernel] Only if buffer is empty just before the lock.
+
+	retval = -EAGAIN; //Error -11 Try Again. [Kernel] Only if buffer is empty just before the lock.
 
     }
 
     // [Kernel] Liberates SpinLock.
     // hrtimer returns to normal execution.
-    spin_unlock_irqrestore(&dev->lock, flags);       
+    spin_unlock_irqrestore(&dev->lock, flags);	     
 
     if (retval > 0)
     {
-        //Buffer Transfer [kernel]; Copies the Sample to Memory Direction of User Space Memory
-        //Only allows to write in the buffer *buf of __user type is ONLY this function. 
-        if (copy_to_user(buf, &sample, sizeof(sample)))
-        {
-            // If copy fails...
-            return -EFAULT; //-14 [Kernel] Bad address
+	//Buffer Transfer [kernel]; Copies the Sample to Memory Direction of User Space Memory
+	//Only allows to write in the buffer *buf of __user type is ONLY this function. 
+	if (copy_to_user(buf, &sample, sizeof(sample)))
+	{
+	    // If copy fails...
+	    return -EFAULT; //-14 [Kernel] Bad address
 
-        }
+	}
 
 
     }
@@ -335,25 +335,25 @@ static ssize_t nxp_simtemp_read(struct file *file, char __user *buf, size_t coun
 // Register the process like sleeping until data is ready and reports immediately.
 //struct file *file [kernel]: gives access to Driver State to know what resources to protect and which data to verify. Equivalent to File Descriptor (fd) from Kernel.
 //struct poll_table_struct *wait [kernel]: Register Mechanism of Callback that register the sleeping process from User Space in queue (wq)
-static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)     //function [Logic] performed when User Space calls to poll(), select() or epoll().
+static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wait)	//function [Logic] performed when User Space calls to poll(), select() or epoll().
 {
     struct nxp_simtemp_dev *dev = file->private_data; //Saves pointer of Global Structure
     
-    __poll_t mask = 0;      //Maks for python
+    __poll_t mask = 0;	    //Maks for python
     unsigned long flags;    // Saves interruptions states. Store and Restore the status of the interruptions.
 
     // [kernel] Register this process in Wait Queue (wq)
     // Crucial for the process to activate wake_up_interruptible and to be awakened.
     // Add User Space information to Wait Queue (dev->wq) from Driver 
     //Producer (hrtimer) calls to wake_up_interruptible(&dev->wq), Kernel reviews poll_table and wakes-up the Python Process
-    poll_wait(file, &dev->wq, wait);    // poll_wait Logic [kernel] from poll_table_struct
+    poll_wait(file, &dev->wq, wait);	// poll_wait Logic [kernel] from poll_table_struct
 
 
     //Check reading status (Disponible data)
     if(!simtemp_buffer_is_empty(dev))
     {
-        //mask to python
-        mask |= (EPOLLIN | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
+	//mask to python
+	mask |= (EPOLLIN | POLLRDNORM); // Disponible Data. PollInput: File is ready for reading. PollReadNormal: Normal Lecture Flag (no urgent)
     }
 
     //Critical section starts that uses a temporal spinlock to access to shared variable 'alerts_count'
@@ -361,9 +361,9 @@ static __poll_t nxp_simtemp_poll(struct file *file, struct poll_table_struct *wa
     
     spin_lock_irqsave(&dev->lock, flags);
 
-    if(dev->alerts_count >0)        //Global Variable
+    if(dev->alerts_count >0)	    //Global Variable
     {
-        mask |= EPOLLPRI; //PollPriority: Event in high priotity
+	mask |= EPOLLPRI; //PollPriority: Event in high priotity
     }
     
     spin_unlock_irqrestore(&dev->lock, flags);
@@ -393,7 +393,7 @@ static ssize_t sampling_ms_show(struct device *dev, struct device_attribute *att
     struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
     
     unsigned long flags;    //Saves interruptions states. Store and Restore the status of the interruptions.
-    ssize_t ret;            //Return Variable
+    ssize_t ret;	    //Return Variable
 
     //--------Critical Section: Protects access to shared variable---------
     spin_lock_irqsave(&nxp_dev->lock, flags);
@@ -416,26 +416,26 @@ static ssize_t sampling_ms_show(struct device *dev, struct device_attribute *att
 static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
     //Obtains pointer to Global Structure. 
-    //nxp_simtemp_dev *nxp_dev: Specific context of driver, called fot the first time in nxp_simtemp_probe().   
+    //nxp_simtemp_dev *nxp_dev: Specific context of driver, called fot the first time in nxp_simtemp_probe().
     struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform. 
     
-    unsigned long value;    //Stores temporarily the numeric value of New Sampling Period through sysfs       
+    unsigned long value;    //Stores temporarily the numeric value of New Sampling Period through sysfs	      
     unsigned long flags;    //Saves interruptions states. Store and Restore the status of the interruptions. 
-    int ret;                //Return Variable
+    int ret;		    //Return Variable
 
     //Converts the input(strings) to numerical value (binary)
-    ret = kstrtoul(buf, 10, &value);    
+    ret = kstrtoul(buf, 10, &value);
 
     //Validation of input 
     if (ret)
     {
-        return ret;
+	return ret;
     }
 
     //Validation of input against insecure values.
     if(value < 10)
     {
-        return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
+	return -EINVAL; //Error -22 Invalid Argument [kernel]: Buffer too small for sample.
     }
 
     //--------Critical Section: Stops, Updates and Restarts the hrtimer---------
@@ -445,7 +445,7 @@ static ssize_t sampling_ms_store(struct device *dev, struct device_attribute *at
     hrtimer_cancel(&nxp_dev->timer);
 
     //Updating the state variables.
-    nxp_dev->sampling_ms = (s32)value;  //Adapts value to miliseconds for sampling 
+    nxp_dev->sampling_ms = (s32)value;	//Adapts value to miliseconds for sampling 
     nxp_dev->period_ns = ms_to_ktime(nxp_dev->sampling_ms); //Converts the sample of ms to ns for hrtimer.
 
     //Restarts timer with new period.
@@ -466,10 +466,10 @@ static ssize_t threshold_mC_show(struct device *dev, struct device_attribute *at
     struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
     
     unsigned long flags;    //Saves interruptions states. Store and Restore the status of the interruptions.
-    ssize_t ret;            //Return Variable
+    ssize_t ret;	    //Return Variable
 
     //--------Critical Section: Protects access to shared variable ---------
-    spin_lock_irqsave(&nxp_dev->lock, flags);   //Prevents that hrtimer_callback() access to nxp_dev->threshold_mC
+    spin_lock_irqsave(&nxp_dev->lock, flags);	//Prevents that hrtimer_callback() access to nxp_dev->threshold_mC
 
     //Converts binary value of nxp_dev->threshold_mC in string contained in buf
     ret = sprintf(buf, "%d\n", nxp_dev->threshold_mC); //Indicates how many bytes were writes in this buffer.
@@ -480,26 +480,26 @@ static ssize_t threshold_mC_show(struct device *dev, struct device_attribute *at
     return ret; 
 }
 
-//----- sysfs Section -  threshold mC store [Kernel] (Reading Function).
+//----- sysfs Section -	 threshold mC store [Kernel] (Reading Function).
 //Attribute (R/W) 'threshold_mC_store': Pointer .store is mapped to this function Updates one variable
 //[STORE] Writing the new umbral of alert
 static ssize_t threshold_mC_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
     struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
-    s32 value;              //Data Type of Kernel signed 32bits for threshold_mC
+    s32 value;		    //Data Type of Kernel signed 32bits for threshold_mC
     
     unsigned long flags;    //Saves interruptions states. Store and Restore the status of the interruptions.
-    int ret;                //Return Variable
+    int ret;		    //Return Variable
 
     //Converts string input to int 32 bits
     ret = kstrtos32(buf, 10, &value);
     if (ret)
     {
-        return ret;
+	return ret;
     }
 
      //--------Critical Section: ---------
-    spin_lock_irqsave(&nxp_dev->lock, flags);   //Prevents that hrtimer_callback() access to nxp_dev->threshold_mC
+    spin_lock_irqsave(&nxp_dev->lock, flags);	//Prevents that hrtimer_callback() access to nxp_dev->threshold_mC
 
     nxp_dev->threshold_mC = value;  //Configuration Changes by User Space for threshold_mC
 
@@ -526,9 +526,9 @@ static ssize_t clear_alert_store(struct device *dev, struct device_attribute *at
 
     //--------Critical Section: Disables the interruptions---------
 
-    spin_lock_irqsave(&nxp_dev->lock, flags);   //Acquires the spinlock and avoid the hrtimer_callback add a new alert to alerts_count
+    spin_lock_irqsave(&nxp_dev->lock, flags);	//Acquires the spinlock and avoid the hrtimer_callback add a new alert to alerts_count
 
-    nxp_dev->alerts_count = 0;  //Resets the counter of alerts to 0
+    nxp_dev->alerts_count = 0;	//Resets the counter of alerts to 0
 
     spin_unlock_irqrestore(&nxp_dev->lock, flags);  //Restore the original state of interruptions
 
@@ -549,10 +549,10 @@ static ssize_t stats_show(struct device *dev, struct device_attribute *attr, cha
     struct nxp_simtemp_dev *nxp_dev = dev_get_drvdata(dev); //Obtains the pointer through the object of device from 'dev' platform.
     
     unsigned long flags;    // Saves interruptions states. Store and Restore the status of the interruptions.
-    ssize_t ret;            //Return Variable
+    ssize_t ret;	    //Return Variable
 
     //--------Critical Section: ---------
-    spin_lock_irqsave(&nxp_dev->lock, flags);   //Prevents that hrtimer_callback() access to nxp_dev->lock
+    spin_lock_irqsave(&nxp_dev->lock, flags);	//Prevents that hrtimer_callback() access to nxp_dev->lock
 
     //Formats the output like a legible string with all counters.
     ret = sprintf(buf, "updates = %u\nalerts = %u\nlast error = %d\n", nxp_dev->updates_count, nxp_dev->alerts_count, 0); 
@@ -571,30 +571,30 @@ static ssize_t stats_show(struct device *dev, struct device_attribute *attr, cha
 // ----------  Syfs Macros  ---------------
 // Static definitions of attributes of sysfs.
 // Atributes (show) for DEVICE_ATTR_RO and (store) for DEVICE_ATTR_WO are NULL. 
-static DEVICE_ATTR_RW(sampling_ms);     //Read/Write attributes for: 'sampling_ms_show' (Read) and 'sampling_ms_store' (Write) through 'dev_attr_sampling_ms' variable
-static DEVICE_ATTR_RW(threshold_mC);    //Read/Write attributes for: 'threshold_mC_show' (Read) and 'threshold_mC_store' (Wtite) through 'dev_attr_threshold_mC' variable.
-static DEVICE_ATTR_RO(stats);           //Read Only attributes for: 'stats_show' (Read Only) through 'dev_attr_stats' variable
-static DEVICE_ATTR_WO(clear_alert);     //Read Only attributes for: 'clear_alert_store' through 'dev_attr_clear_alert' variable
+static DEVICE_ATTR_RW(sampling_ms);	//Read/Write attributes for: 'sampling_ms_show' (Read) and 'sampling_ms_store' (Write) through 'dev_attr_sampling_ms' variable
+static DEVICE_ATTR_RW(threshold_mC);	//Read/Write attributes for: 'threshold_mC_show' (Read) and 'threshold_mC_store' (Wtite) through 'dev_attr_threshold_mC' variable.
+static DEVICE_ATTR_RO(stats);		//Read Only attributes for: 'stats_show' (Read Only) through 'dev_attr_stats' variable
+static DEVICE_ATTR_WO(clear_alert);	//Read Only attributes for: 'clear_alert_store' through 'dev_attr_clear_alert' variable
 
 // ------- Syfs Control List Driver ----------------
 //  .attrs 'struct attribute_group' contains all Control Files of Syfs
-//              |->  Syfs Macros 'struct device_attribute' contains pointers to functions implemented(.show , .store) for mapping a Driver Function to Sysfs File
-//                                  |-> .attr    'struct attribute' cointains (.mode, .owner, .name etc)
+//		|->  Syfs Macros 'struct device_attribute' contains pointers to functions implemented(.show , .store) for mapping a Driver Function to Sysfs File
+//				    |-> .attr	 'struct attribute' cointains (.mode, .owner, .name etc)
 
 // [Kernel] Attributes List for 'Virtual Control Files' of Syfs for configuration must be created in (/sys/.../simtemp0) to register in probe()
 // Complete map for all sampling_ms, threshold_mC and stats files that belongs to Driver.
-static struct attribute *nxp_simtemp_attrs[]=   //Definition of attributes group
+static struct attribute *nxp_simtemp_attrs[]=	//Definition of attributes group
 {
-        
-        //dev_attr_clear_alert: Global Variable of struct device_attribute type from macro DEVICE_ATTR_WO()
 
-        //Created for Macros DEVICE_ATTR_RW(sampling_ms), DEVICE_ATTR_RW(threshold_mC), DEVICE_ATTR_RO(stats) and DEVICE_ATTR_WO(clear_alert);.   
-        &dev_attr_sampling_ms.attr,     // Pointer to structure sampling_ms that contains the 'reading (_show)' and 'writing (_store)' functions.
-        &dev_attr_threshold_mC.attr,    // Pointer to structure threshold_mC that contains the 'reading (_show)' and 'writing (_store)' functions.
-        &dev_attr_stats.attr,           // Pointer to structure stats that contains 'only reading (_stats)' function.
-        &dev_attr_clear_alert.attr,     // Pointer to structure clear_alert
-        NULL,                           // Null Pointer to indicate the final of list. (sentinel)
-        
+	//dev_attr_clear_alert: Global Variable of struct device_attribute type from macro DEVICE_ATTR_WO()
+
+	//Created for Macros DEVICE_ATTR_RW(sampling_ms), DEVICE_ATTR_RW(threshold_mC), DEVICE_ATTR_RO(stats) and DEVICE_ATTR_WO(clear_alert);.	  
+	&dev_attr_sampling_ms.attr,	// Pointer to structure sampling_ms that contains the 'reading (_show)' and 'writing (_store)' functions.
+	&dev_attr_threshold_mC.attr,	// Pointer to structure threshold_mC that contains the 'reading (_show)' and 'writing (_store)' functions.
+	&dev_attr_stats.attr,		// Pointer to structure stats that contains 'only reading (_stats)' function.
+	&dev_attr_clear_alert.attr,	// Pointer to structure clear_alert
+	NULL,				// Null Pointer to indicate the final of list. (sentinel)
+
 };
 
 
@@ -608,7 +608,7 @@ static const struct attribute_group nxp_simtemp_attr_group =
 
 
 
-//------------------ Platform Device     Functions     -----------------------------------/
+//------------------ Platform Device	 Functions     -----------------------------------/
 // ----------- Platform Device: Drive Functions (Lifecycle)----------------------------------------/
 //platform_device [Kernel] is a container for describe ann manage a Device without bus
 
@@ -627,34 +627,34 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     dev_info(dev,"Debug 1 Start\n");
 
     //Memory Allocation: Allocates and clean memory for structure nxp_simtemp_dev.
-    nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);    //Allocate
+    nxp_dev = devm_kzalloc(dev, sizeof(*nxp_dev), GFP_KERNEL);	  //Allocate
     if (!nxp_dev)
     {
-        dev_err(dev, "Debug 2 Memory allocation failed\n");
-        //kfree(nxp_dev);//Liberacion manual de memoria
-        return -ENOMEM; //Without Memory
+	dev_err(dev, "Debug 2 Memory allocation failed\n");
+	//kfree(nxp_dev);//Liberacion manual de memoria
+	return -ENOMEM; //Without Memory
     }
     dev_info(dev,"Debug 3 Memoria allocated and valid\n");
     
     // Creation of Pointer Persistent *nxp_dev within 'platform_device *pdev'
-    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer used in nxp_simtemp_read(), nxp_simtemp_poll(), simtemp_timer_callback() and sampling_ms_show()    
+    platform_set_drvdata(pdev, nxp_dev); //[kernel] Saves the pointer used in nxp_simtemp_read(), nxp_simtemp_poll(), simtemp_timer_callback() and sampling_ms_show()	 
 
     dev_info(dev,"Debug 4 Driver Data Set\n");
     
-    //----------   DT section   ----------------
+    //----------   DT section	----------------
     //-------Searching and writing of 'sampling_ms' in DT------
     ret = of_property_read_u32(pdev->dev.of_node, "sampling-ms", &value);
 
     if(ret)
     {
-        dev_warn(&pdev->dev, "Sampling period not set in DT, using default (100ms)\n");
-        nxp_dev->sampling_ms =100;
+	dev_warn(&pdev->dev, "Sampling period not set in DT, using default (100ms)\n");
+	nxp_dev->sampling_ms =100;
 
     }
 
     else
     {
-        nxp_dev->sampling_ms = (s32)value;
+	nxp_dev->sampling_ms = (s32)value;
 
     }
 
@@ -663,22 +663,22 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 
     if(ret)
     {
-        dev_warn(&pdev->dev, "Threshold not used in DT, using default (4500mC)\n");
-        nxp_dev->threshold_mC = 4500; 
+	dev_warn(&pdev->dev, "Threshold not used in DT, using default (4500mC)\n");
+	nxp_dev->threshold_mC = 4500; 
 
     }
 
     else
     {
 
-        nxp_dev->threshold_mC = (s32)value;
+	nxp_dev->threshold_mC = (s32)value;
 
     }
     //--------end of DT configuration
     
     //Initializes primitives for spinlock and wait_queue.
-    spin_lock_init(&nxp_dev->lock);     //Initialize spinlock [Kernel Function]
-    init_waitqueue_head(&nxp_dev->wq);  //Initialize waiting queue [Kernel Function]
+    spin_lock_init(&nxp_dev->lock);	//Initialize spinlock [Kernel Function]
+    init_waitqueue_head(&nxp_dev->wq);	//Initialize waiting queue [Kernel Function]
 
     dev_info(dev,"Debug 5 Primitives intialized\n");
 
@@ -702,7 +702,7 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
     //Transfer Channel of Binary Data between Kernel and User Space
     //Register of Character Device cointauned in 'mdev'
     nxp_dev->mdev.minor = MISC_DYNAMIC_MINOR; // Asks to Kernel for a lower available number, maybe 0.
-    nxp_dev->mdev.name = "simtemp";           //File Name in /dev/
+    nxp_dev->mdev.name = "simtemp";	      //File Name in /dev/
     // Allocate the Function Operation Table 'nxp_simtemp_fops' to Files System of Kernel (/dev/simtemp)
     nxp_dev->mdev.fops = &nxp_simtemp_fops;   
 
@@ -711,14 +711,14 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 
     if (ret)
     {
-        dev_err(dev, "Debug 6. Error registered miscdevice\n");
-        //kfree(nxp_dev);//Liberacion manual de memoria
-        return ret;
+	dev_err(dev, "Debug 6. Error registered miscdevice\n");
+	//kfree(nxp_dev);//Liberacion manual de memoria
+	return ret;
     }
     //-------------changes review---------belowwwwww
     else
     {
-        dev_err(dev, "Debug 6.1 Device Driver registered successfully\n");
+	dev_err(dev, "Debug 6.1 Device Driver registered successfully\n");
 
     }
 
@@ -727,10 +727,10 @@ static int nxp_simtemp_probe(struct platform_device *pdev)
 
     if (ret)
     {
-        dev_err(dev, "Debug 7 Error registered sysfs group\n");
-        misc_deregister(&nxp_dev->mdev);
-        
-        return ret;
+	dev_err(dev, "Debug 7 Error registered sysfs group\n");
+	misc_deregister(&nxp_dev->mdev);
+
+	return ret;
 
     }
     dev_info(dev, "Debug 8 Device and Syfs registered successfully\n");
@@ -753,16 +753,16 @@ static void nxp_simtemp_remove(struct platform_device *pdev) //[Kernel] structur
     
     if(nxp_dev)
     {
-        // Producer is stopped (hrtimer initialized in probe function)
-        hrtimer_cancel(&nxp_dev->timer); 
+	// Producer is stopped (hrtimer initialized in probe function)
+	hrtimer_cancel(&nxp_dev->timer); 
 
-        //*-------Sysfs Secion---------- */
-        sysfs_remove_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
+	//*-------Sysfs Secion---------- */
+	sysfs_remove_group(&pdev->dev.kobj, &nxp_simtemp_attr_group);
   
-          // Unregistered Interface: 
-        misc_deregister(&nxp_dev->mdev);
+	  // Unregistered Interface: 
+	misc_deregister(&nxp_dev->mdev);
 
-        dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
+	dev_info(&pdev->dev,"NXP SimTemp device unregistered. \n");
     }
       
 }
@@ -779,25 +779,25 @@ static int __init simtemp_runtime_init(void)
     // 1. Register platform driver (for probe() is ready)
     ret = platform_driver_register(&nxp_simtemp_driver);
     if (ret) {
-        printk(KERN_ERR "NXP SimTemp: Failed to register platform driver. Ret: %d\n", ret);
-        return ret;
+	printk(KERN_ERR "NXP SimTemp: Failed to register platform driver. Ret: %d\n", ret);
+	return ret;
     }
 
     // 2. Memory allocation for Virtual Device.
     simtemp_pdev = platform_device_alloc("nxp_simtemp", PLATFORM_DEVID_NONE);
     if (!simtemp_pdev) {
-        printk(KERN_ERR "NXP SimTemp: Failed to allocate platform device.\n");
-        platform_driver_unregister(&nxp_simtemp_driver);
-        return -ENOMEM;
+	printk(KERN_ERR "NXP SimTemp: Failed to allocate platform device.\n");
+	platform_driver_unregister(&nxp_simtemp_driver);
+	return -ENOMEM;
     }
     
     // 3. Add virtual device (forces to call to nxp_simtemp_probe())
     ret = platform_device_add(simtemp_pdev);
     if (ret) {
-        printk(KERN_ERR "NXP SimTemp: Failed to add virtual platform device. Ret: %d\n", ret);
-        platform_driver_unregister(&nxp_simtemp_driver);
-        platform_device_put(simtemp_pdev);
-        return ret;
+	printk(KERN_ERR "NXP SimTemp: Failed to add virtual platform device. Ret: %d\n", ret);
+	platform_driver_unregister(&nxp_simtemp_driver);
+	platform_device_put(simtemp_pdev);
+	return ret;
     }
 
     // If call to nxp_simtemp_probe() was successful:
@@ -812,7 +812,7 @@ static int __init simtemp_runtime_init(void)
 static void __exit simtemp_runtime_exit(void)
 {
     //For Clean Unload. Cleaning in inverse order.
-    platform_device_unregister(simtemp_pdev);          //
+    platform_device_unregister(simtemp_pdev);	       //
     platform_driver_unregister(&nxp_simtemp_driver);   //
     printk(KERN_INFO "NXP SimTemp: Module unloaded\n");
 

@@ -14,6 +14,17 @@ fail() {
 
 echo "--- 1. Running Code Quality Check (LINT) ---"
 
+# --- 0. PRE-FORMATTING: DOS2UNIX FIX ---
+if command -v dos2unix &> /dev/null; then
+    echo "Converting file to Unix line endings..."
+    dos2unix "$KERNEL_FILE"
+else
+    # Esto no es un error fatal, pero se recomienda instalarlo.
+    echo "WARNING: dos2unix not installed. May encounter DOS line ending errors."
+fi
+
+#echo "--- 1. Running Code Quality Check (LINT) ---"
+
 # --- 1. CHECKPATCH (C CODE) ---
 if [ -f "$CHECKPATCH_PATH" ]; then
     echo "Checking Kernel Code Style (checkpatch)..."
