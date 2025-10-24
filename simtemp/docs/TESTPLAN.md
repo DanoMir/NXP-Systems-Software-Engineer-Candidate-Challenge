@@ -3,22 +3,23 @@
 
 # TESTPLAN.md
 
-1. Objectives and scopes
+# 1. Objectives and scopes
 The objective of this Test Plan is validate the behavior and robustness of Platform Driver Module 'nxp_simtemp' and its User Space Interface (CLI). The scope covers three communication routes: Data Control and Asyncronous Events.
 
-2. Test Environment
+# 2. Test Environment
 
-* Execution Platform: Ubuntu 24.04 LTS (or similar versions) for Virtual Machine in Oracle Virtual Box Administrator
-* Test Tool: Aplication CLI in Python 'main.py' excecuted in automation script 'run_demo.sh'.
+    * Execution Platform: Ubuntu 24.04 LTS (or similar versions) for Virtual Machine in Oracle Virtual Box Administrator
+
+    * Test Tool: Aplication CLI in Python 'main.py' excecuted in automation script 'run_demo.sh'.
 
 3. Test Cases (Acceptance Criteria Validation)
 
-- **T1 — Load/Unload:** build → `insmod` → verify `/dev/simtemp` & sysfs → `rmmod` (no warnings).
-- **T2 — Periodic Read:** set `sampling_ms=100`; verify ~10±1 samples/sec using timestamps.
-- **T3 — Threshold Event:** lower threshold slightly below mean; ensure `poll` unblocks within 2–3 periods and flag is set.
-- **T4 — Error Paths:** invalid sysfs writes → `-EINVAL`; very fast sampling (e.g., `1ms`) doesn’t wedge; `stats` still increments.
-- **T5 — Concurrency:** run reader + config writer concurrently; no deadlocks; safe unload.
-- **T6 — API Contract:** struct size/endianness documented; user app handles partial reads.
+    - **T1 — Load/Unload:** build → `insmod` → verify `/dev/simtemp` & sysfs → `rmmod` (no warnings).
+    - **T2 — Periodic Read:** set `sampling_ms=100`; verify ~10±1 samples/sec using timestamps.
+    - **T3 — Threshold Event:** lower threshold slightly below mean; ensure `poll` unblocks within 2–3 periods and flag is set.
+    - **T4 — Error Paths:** invalid sysfs writes → `-EINVAL`; very fast sampling (e.g., `1ms`) doesn’t wedge; `stats` still increments.
+    - **T5 — Concurrency:** run reader + config writer concurrently; no deadlocks; safe unload.
+    - **T6 — API Contract:** struct size/endianness documented; user app handles partial reads.
 
 ====================================================================================================================================================
 | TEST CASE: T1 — Load/Unload                                                                                                                      |
@@ -74,7 +75,7 @@ The objective of this Test Plan is validate the behavior and robustness of Platf
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
 | Automated Testing.                 | Execute run_demo.sh which calls   | The Log returns exit 'code 0'      | nxp_simtemp_poll()                 |
 |                                    | to 'cli_test_mode' this mode      | (SUCCESSFUL), verifying that poll()| wait_queue                         |
-|                                    | configure the threshold to        | woke-up tith POLLPRI flag in time. | cli_test_mode                      |
+|                                    | configure the threshold to        | woke-up with POLLPRI flag in time. | cli_test_mode                      |
 |                                    | 4000 mC and wait the alert.       |                                    |                                    |
 |------------------------------------|-----------------------------------|------------------------------------|------------------------------------|
 | Alert Consumption.                 | Execute run_demo.sh and verify    | The Log must be one line with      | nxp_simtemp_read()                 |
