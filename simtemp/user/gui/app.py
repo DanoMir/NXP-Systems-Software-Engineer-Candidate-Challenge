@@ -49,8 +49,8 @@ class SensorWorker(QObject):
                             self.alert_signal.emit(True)
                             
                         #2. Fast Empty Loop.
-                        While(True):
-                            try:
+                        while True:
+                            try: 
                                 #Reading Logic and unpacking must be copied from read_and_print_sample
                                 data = os.read(self.fd, SAMPLE_SIZE)
                                 if len(data) != SAMPLE_SIZE: break
